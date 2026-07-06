@@ -66,19 +66,28 @@ export function useUpdateTaskStatus(): UseMutationResult<
   return useMutation({
     mutationFn: async ({ taskId, status, position }) =>
       runEffect(updateTaskStatusEffect(taskId, status, position)),
-    onMutate: async ({ taskId, status }) => {
+    onMutate: async ({ taskId, status, position }) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
 
       // Snapshot the previous value
       const previousTasks = queryClient.getQueryData<Task[]>(["tasks"]);
 
-      // Optimistically update status only — let server refetch handle exact position
+      // Optimistically update status and position
       queryClient.setQueryData<Task[]>(["tasks"], (oldTasks) => {
         if (!oldTasks) return [];
-        return oldTasks.map((t) =>
-          t.id === taskId ? { ...t, status } : t,
+        const updated = oldTasks.map((t) =>
+          t.id === taskId ? { ...t, status, position: position ?? t.position } : t,
         );
+        // Re-sort by status then position for immediate visual correctness
+        const order: Record<string, number> = { TODO: 0, IN_PROGRESS: 1, DONE: 2 };
+        updated.sort((a, b) => {
+          const sa = order[a.status] ?? 0;
+          const sb = order[b.status] ?? 0;
+          if (sa !== sb) return sa - sb;
+          return a.position - b.position;
+        });
+        return updated;
       });
 
       // Return a context object with the snapshotted value
