@@ -6,7 +6,7 @@ import { TaskCard } from './task-card';
 import type { Task, TaskStatus } from '../../schemas/task.schema';
 import {
   DndContext,
-  closestCenter,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -23,12 +23,25 @@ import {
 } from '@dnd-kit/sortable';
 import { useState, useEffect } from 'react';
 
-function DroppableColumn({ status, label, children }: { status: TaskStatus; label: string; children: React.ReactNode }) {
+const COLUMNS: { status: TaskStatus; label: string }[] = [
+  { status: 'TODO', label: 'To Do' },
+  { status: 'IN_PROGRESS', label: 'In Progress' },
+  { status: 'DONE', label: 'Done' },
+];
+
+// ── Sub-components ──
+
+function DroppableColumn({ status, label, isEmpty, children }: { status: TaskStatus; label: string; isEmpty: boolean; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
     <div ref={setNodeRef} className={`bg-gray-100 rounded-lg p-4 transition-colors ${isOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}>
       <h3 className="font-semibold text-gray-800 mb-3">{label}</h3>
       {children}
+      {isOver && isEmpty && (
+        <div className="h-16 border-2 border-dashed border-blue-400 rounded-lg bg-blue-50 flex items-center justify-center">
+          <p className="text-blue-500 text-sm">Drop here</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -51,23 +64,42 @@ function ErrorToast({ message }: { message: string | null }) {
   );
 }
 
-const columns: { status: TaskStatus; label: string }[] = [
-  { status: 'TODO', label: 'To Do' },
-  { status: 'IN_PROGRESS', label: 'In Progress' },
-  { status: 'DONE', label: 'Done' },
-];
+// ── Cursor midpoint drop calculation ──
+//
+// Production-grade logic: use pointerWithin collision detection + 50% vertical
+// threshold on the target card. Pointer above midpoint → insert before.
+// Pointer below midpoint → insert after. Matches Trello/Jira/Linear feel.
 
-function findDropTarget(tasks: Task[], overId: string): { status: TaskStatus; index: number } | null {
-  // ponytail: O(n²) scan for <50 tasks per column, fine
-  if (columns.some((col) => col.status === overId)) {
-    const status = overId as TaskStatus;
-    return { status, index: tasks.filter((t) => t.status === status).length };
+function calcDropPosition(
+  tasks: Task[],
+  activeTask: Task,
+  overId: string,
+  overRect: { top: number; height: number } | undefined,
+  deltaY: number,
+  activatorEvent: Event,
+): { status: TaskStatus; position: number } | null {
+  // Drop on a column (empty space or header area) → append to end
+  if (COLUMNS.some((c) => c.status === overId)) {
+    const newStatus = overId as TaskStatus;
+    return { status: newStatus, position: tasks.filter((t) => t.status === newStatus).length };
   }
+
+  // Drop on a task card → 50% threshold determines insert-before or insert-after
   const overTask = tasks.find((t) => t.id === overId);
-  if (!overTask) return null;
-  const columnTasks = tasks.filter((t) => t.status === overTask.status);
-  return { status: overTask.status, index: columnTasks.findIndex((t) => t.id === overId) };
+  if (!overTask || overTask.id === activeTask.id) return null;
+
+  // ponytail: fallback when rect isn't available (keyboard navigation, SSR hydration)
+  if (!overRect) return { status: overTask.status, position: overTask.position };
+
+  // Current pointer Y = activation point + cumulative drag delta
+  const pointerY = (activatorEvent as PointerEvent).clientY + deltaY;
+  const midpointY = overRect.top + overRect.height / 2;
+  const targetPos = pointerY > midpointY ? overTask.position + 1 : overTask.position;
+
+  return { status: overTask.status, position: targetPos };
 }
+
+// ── Main ──
 
 export function KanbanBoard() {
   const tasksQuery = useTasks();
@@ -77,50 +109,52 @@ export function KanbanBoard() {
 
   useEffect(() => {
     if (updateTask.isError) {
-      setToast(updateTask.error instanceof Error ? updateTask.error.message : 'Failed to move task. Please try again.');
+      setToast(updateTask.error instanceof Error ? updateTask.error.message : 'Failed to move task.');
       const timer = setTimeout(() => { setToast(null); }, 3000);
       return () => { clearTimeout(timer); };
     }
   }, [updateTask.isError, updateTask.error]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-    if (!over) return;
-    const activeTask = tasksQuery.data?.find((t) => t.id === active.id);
-    if (!activeTask) return;
-    const target = findDropTarget(tasksQuery.data ?? [], over.id.toString());
-    if (!target) return;
-    if (target.status === activeTask.status && target.index === activeTask.position) return;
-    updateTask.mutate({ taskId: activeTask.id, status: target.status, position: target.index });
-  };
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id.toString());
   };
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveId(null);
+    const { active, over, delta, activatorEvent } = event;
+    if (!over) return;
+    const tasks = tasksQuery.data ?? [];
+    const activeTask = tasks.find((t) => t.id === active.id);
+    if (!activeTask) return;
+    const target = calcDropPosition(tasks, activeTask, over.id.toString(), over.rect, delta.y, activatorEvent);
+    if (!target) return;
+    if (activeTask.status === target.status && activeTask.position === target.position) return;
+    updateTask.mutate({ taskId: activeTask.id, status: target.status, position: target.position });
+  };
+
   if (tasksQuery.isLoading) return <div className="p-4">Loading tasks...</div>;
-  if (tasksQuery.isError) {
-    return <div className="p-4 text-red-600">Error loading tasks: {tasksQuery.error instanceof Error ? tasksQuery.error.message : String(tasksQuery.error)}</div>;
-  }
+  if (tasksQuery.isError) return <div className="p-4 text-red-600">Error loading tasks.</div>;
 
   const tasks = tasksQuery.data || [];
   const activeTask = tasks.find((t) => t.id === activeId);
-  const groupedTasks = columns.reduce((acc, col) => {
-    acc[col.status] = tasks.filter((t) => t.status === col.status).sort((a, b) => a.position - b.position);
-    return acc;
-  }, {} as Record<TaskStatus, Task[]>);
+  const groupedTasks = {} as Record<TaskStatus, Task[]>;
+  for (const col of COLUMNS) groupedTasks[col.status] = tasks.filter((t) => t.status === col.status).sort((a, b) => a.position - b.position);
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={pointerWithin}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {columns.map((col) => (
-          <DroppableColumn key={col.status} status={col.status} label={col.label}>
+        {COLUMNS.map((col) => (
+          <DroppableColumn key={col.status} status={col.status} label={col.label} isEmpty={groupedTasks[col.status].length === 0}>
             <SortableContext items={groupedTasks[col.status].map((t) => t.id)} strategy={verticalListSortingStrategy}>
               {groupedTasks[col.status].length === 0
                 ? <p className="text-gray-500 text-sm">No tasks</p>

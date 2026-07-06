@@ -27,7 +27,11 @@ export function SortableTaskCard({ task }: SortableTaskCardProps) {
 
   return (
     <div ref={setNodeRef} style={style} className="mb-3 flex items-start gap-1">
-      {/* Drag handle — only this initiates drag */}
+      {/* Card content */}
+      <div className="flex-1 min-w-0">
+        <TaskCard task={task} />
+      </div>
+      {/* Drag handle on the right */}
       <button
         type="button"
         {...attributes}
@@ -45,10 +49,6 @@ export function SortableTaskCard({ task }: SortableTaskCardProps) {
           <circle cx="15" cy="18" r="1.5" />
         </svg>
       </button>
-      {/* Card content — fully interactive, no drag interference */}
-      <div className="flex-1 min-w-0">
-        <TaskCard task={task} />
-      </div>
     </div>
   );
 }
