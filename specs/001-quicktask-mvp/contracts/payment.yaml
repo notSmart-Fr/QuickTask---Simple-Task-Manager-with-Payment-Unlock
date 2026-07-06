@@ -1,0 +1,89 @@
+# Payment API
+
+Base URL: `{backend}/api/v1/payment`
+
+All user-facing endpoints require `Authorization: Bearer <token>`. Webhook endpoint is unauthenticated (verified by Stripe signature).
+
+## POST /create-checkout
+
+Create a Stripe Checkout Session for the $5 one-time payment. Returns a URL the user should be redirected to.
+
+**Response 200**:
+```json
+{
+  "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_test_..."
+}
+```
+
+**Response 400** (already premium):
+```json
+{
+  "error": "Already premium",
+  "message": "Your account already has unlimited tasks."
+}
+```
+
+---
+
+## POST /webhook
+
+Stripe webhook endpoint. Receives `checkout.session.completed` and `checkout.session.expired` events. Verifies Stripe signature before processing.
+
+**Idempotency**: Uses `stripeEventId` to prevent duplicate processing. If the event was already processed, returns 200 without side effects.
+
+**Request**: Raw body + `stripe-signature` header (handled by Stripe SDK).
+
+**Response 200** (on successful processing or already-processed event):
+```json
+{
+  "received": true
+}
+```
+
+**Response 400** (invalid signature):
+```json
+{
+  "error": "Invalid signature"
+}
+```
+
+**Event: checkout.session.completed**
+1. Extract `stripeEventId` from event
+2. Check if event already processed (idempotency)
+3. Find Payment by `stripeSessionId`
+4. In a transaction:
+   a. Update Payment: status → COMPLETED, stripeEventId set
+   b. Update User: isPremium → true
+5. Return 200
+
+**Event: checkout.session.expired**
+1. Find Payment by `stripeSessionId`
+2. Update Payment: status → FAILED
+3. Return 200 (user can retry with new checkout)
+
+---
+
+## GET /status
+
+Get the authenticated user's payment/premium status.
+
+**Response 200**:
+```json
+{
+  "isPremium": false,
+  "lastPayment": {
+    "id": "uuid",
+    "status": "PENDING",
+    "amount": 500,
+    "createdAt": "2026-07-06T10:00:00.000Z"
+  }
+}
+```
+
+If no payments exist, `lastPayment` is null:
+```json
+{
+  "isPremium": false,
+  "lastPayment": null
+}
+```

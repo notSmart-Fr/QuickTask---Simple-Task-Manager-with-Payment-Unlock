@@ -1,0 +1,144 @@
+# Tasks API
+
+Base URL: `{backend}/api/v1/tasks`
+
+All endpoints require `Authorization: Bearer <token>`.
+
+## GET /tasks
+
+List all tasks for the authenticated user.
+
+**Response 200**:
+```json
+{
+  "tasks": [
+    {
+      "id": "uuid",
+      "title": "Set up project",
+      "description": "Initialize repo and install deps",
+      "status": "TODO",
+      "createdAt": "2026-07-06T10:00:00.000Z"
+    },
+    {
+      "id": "uuid",
+      "title": "Write tests",
+      "description": "",
+      "status": "IN_PROGRESS",
+      "createdAt": "2026-07-06T09:00:00.000Z"
+    }
+  ],
+  "total": 2,
+  "limit": 3,
+  "isPremium": false
+}
+```
+
+**Response 401**: `{ "error": "Authentication required" }`
+
+---
+
+## POST /tasks
+
+Create a new task. Defaults to "TODO" status.
+
+**Request**:
+```json
+{
+  "title": "Set up project",
+  "description": "Initialize repo and install dependencies"
+}
+```
+
+**Validation**:
+- `title`: required, 1-200 chars after trim
+- `description`: optional, max 2000 chars
+
+**Response 201**:
+```json
+{
+  "id": "uuid",
+  "title": "Set up project",
+  "description": "Initialize repo and install dependencies",
+  "status": "TODO",
+  "createdAt": "2026-07-06T10:00:00.000Z"
+}
+```
+
+**Response 403** (free user at task limit):
+```json
+{
+  "error": "Task limit reached",
+  "message": "Free users can create up to 3 tasks. Unlock unlimited tasks for $5.",
+  "currentCount": 3,
+  "limit": 3,
+  "isPremium": false
+}
+```
+
+**Response 400** (validation error):
+```json
+{
+  "error": "Validation failed",
+  "details": [
+    { "field": "title", "message": "Title is required" }
+  ]
+}
+```
+
+---
+
+## DELETE /tasks/:id
+
+Delete a task owned by the authenticated user.
+
+**Response 200**:
+```json
+{
+  "deleted": true
+}
+```
+
+**Response 404**:
+```json
+{
+  "error": "Task not found"
+}
+```
+
+**Response 403** (task belongs to another user):
+```json
+{
+  "error": "Forbidden"
+}
+```
+
+---
+
+## PATCH /tasks/:id/status
+
+Update the status of a task owned by the authenticated user.
+
+**Request**:
+```json
+{
+  "status": "IN_PROGRESS"
+}
+```
+
+**Validation**:
+- `status`: required, must be one of "TODO", "IN_PROGRESS", "DONE"
+
+**Response 200**:
+```json
+{
+  "id": "uuid",
+  "title": "Set up project",
+  "description": "Initialize repo and install deps",
+  "status": "IN_PROGRESS",
+  "createdAt": "2026-07-06T10:00:00.000Z"
+}
+```
+
+**Response 404**: `{ "error": "Task not found" }`
+**Response 403**: `{ "error": "Forbidden" }`
+**Response 400**: `{ "error": "Validation failed", "details": [...] }`

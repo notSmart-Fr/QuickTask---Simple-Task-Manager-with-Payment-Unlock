@@ -1,0 +1,108 @@
+# Auth API
+
+Base URL: `{backend}/api/v1/auth`
+
+## POST /register
+
+Register a new user account.
+
+**Request**:
+```json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "secret123"
+}
+```
+
+**Validation**:
+- `name`: required, 1-100 chars
+- `email`: required, valid email, unique
+- `password`: required, min 8 chars
+
+**Response 201**:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "id": "uuid",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "isPremium": false
+  }
+}
+```
+
+**Response 409** (duplicate email):
+```json
+{
+  "error": "Email already registered"
+}
+```
+
+**Response 400** (validation error):
+```json
+{
+  "error": "Validation failed",
+  "details": [
+    { "field": "email", "message": "Invalid email format" }
+  ]
+}
+```
+
+---
+
+## POST /login
+
+Authenticate an existing user.
+
+**Request**:
+```json
+{
+  "email": "john@example.com",
+  "password": "secret123"
+}
+```
+
+**Response 200**:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "id": "uuid",
+    "name": "John Doe",
+    "email": "john@example.com",
+    "isPremium": false
+  }
+}
+```
+
+**Response 401**:
+```json
+{
+  "error": "Invalid email or password"
+}
+```
+
+---
+
+## GET /me
+
+Get the currently authenticated user's profile. Requires `Authorization: Bearer <token>`.
+
+**Response 200**:
+```json
+{
+  "id": "uuid",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "isPremium": false
+}
+```
+
+**Response 401**:
+```json
+{
+  "error": "Authentication required"
+}
+```
