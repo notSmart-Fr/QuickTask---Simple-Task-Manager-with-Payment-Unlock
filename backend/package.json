@@ -1,5 +1,6 @@
 {
   "name": "quicktask-backend",
+  "packageManager": "pnpm@9.15.0",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
