@@ -13,6 +13,7 @@ const stripe = new Stripe(config.STRIPE_SECRET_KEY, {
 export class StripeGateway implements PaymentGatewayPort {
   async createCheckoutSession(
     userId: string,
+    customerEmail: string,
     successUrl: string,
     cancelUrl: string,
   ): Promise<StripeCheckoutSession> {
@@ -20,6 +21,7 @@ export class StripeGateway implements PaymentGatewayPort {
       mode: "payment",
       success_url: successUrl,
       cancel_url: cancelUrl,
+      customer_email: customerEmail,
       line_items: [
         {
           price_data: {

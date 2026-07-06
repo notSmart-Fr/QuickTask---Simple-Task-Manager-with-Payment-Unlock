@@ -37,7 +37,7 @@ function DragPreview({ task }: { task: Task | undefined }) {
   if (!task) return null;
   return (
     <DragOverlay>
-      <div className="opacity-50"><TaskCard task={task} variant="overlay" /></div>
+      <div className="shadow-2xl rotate-2"><TaskCard task={task} variant="overlay" /></div>
     </DragOverlay>
   );
 }

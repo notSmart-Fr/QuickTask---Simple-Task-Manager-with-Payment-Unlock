@@ -99,9 +99,15 @@ export function useUpdateTaskStatus(): UseMutationResult<
         queryClient.setQueryData(["tasks"], context.previousTasks);
       }
     },
-    onSettled: () => {
-      // Always refetch after error or success
-      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    // ponytail: Replace the moved task with the server's authoritative position
+    // directly in the cache — avoids the visual snap from refetching.
+    onSuccess: (serverTask, { taskId }) => {
+      queryClient.setQueryData<Task[]>(["tasks"], (oldTasks) => {
+        if (!oldTasks) return [];
+        return oldTasks.map((t) =>
+          t.id === taskId ? serverTask : t,
+        );
+      });
     },
   });
 }

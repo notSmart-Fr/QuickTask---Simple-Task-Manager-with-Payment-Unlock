@@ -23,6 +23,7 @@ export class PaymentService {
 
   createCheckout(
     userId: string,
+    customerEmail: string,
     successUrl: string,
     cancelUrl: string,
   ): Effect.Effect<string, Error> {
@@ -31,6 +32,7 @@ export class PaymentService {
         try: () =>
           this.stripeGateway.createCheckoutSession(
             userId,
+            customerEmail,
             successUrl,
             cancelUrl,
           ),

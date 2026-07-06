@@ -11,7 +11,7 @@ const CreateCheckoutSchema = z.object({
 
 function getUser(req: Request) {
   if (!req.user) throw new Error("Unauthorized");
-  return { id: req.user.id, isPremium: req.user.isPremium };
+  return { id: req.user.id, email: req.user.email, isPremium: req.user.isPremium };
 }
 
 export function createPaymentRouter(paymentService: PaymentService) {
@@ -32,6 +32,7 @@ export function createPaymentRouter(paymentService: PaymentService) {
         Effect.either(
           paymentService.createCheckout(
             getUser(req).id,
+            getUser(req).email,
             result.data.successUrl,
             result.data.cancelUrl,
           ),

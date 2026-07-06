@@ -20,6 +20,7 @@ export interface StripeCheckoutSession {
 export interface PaymentGatewayPort {
   createCheckoutSession(
     userId: string,
+    customerEmail: string,
     successUrl: string,
     cancelUrl: string,
   ): Promise<StripeCheckoutSession>;
