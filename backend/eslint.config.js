@@ -240,6 +240,25 @@ export default tseslint.config(
   },
 
   // ──────────────────────────────────────────────────
+  // Effect-TS: try/catch is FORBIDDEN in core/ and api/
+  // Domain errors go through the Effect error channel (Data.TaggedError)
+  // Routes use Effect.either + _tag matching — never try/catch
+  // ──────────────────────────────────────────────────
+
+  {
+    files: ["src/core/**/*.ts", "src/api/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "TryStatement",
+          message: "try/catch is FORBIDDEN in core/ and api/. Use Effect.gen + Effect.tryPromise for async boundaries, and Effect.either + Either.isLeft for error matching in routes. See AGENTS.md §Effect-TS Rules.",
+        },
+      ],
+    },
+  },
+
+  // ──────────────────────────────────────────────────
   // DB-Layer Bans (Prisma) — per archguard-methodology §Database-Layer Bans
   // ──────────────────────────────────────────────────
 

@@ -6,16 +6,18 @@ import { useRouter } from 'next/navigation';
 import { AddTaskForm } from '../../features/tasks/add-task-form';
 import { KanbanBoard } from '../../features/tasks/kanban-board';
 import { useTasks } from '../../features/tasks/tasks.api';
+import { UnlockButton } from '../../features/payment/unlock-button';
 
 function FreeTierBanner({ taskCount }: { taskCount: number }) {
   return (
-    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
       <p className="text-yellow-800">
         Tasks: {taskCount}/3 used.{' '}
         {taskCount >= 3 && (
           <span className="font-semibold">Upgrade to premium for unlimited tasks!</span>
         )}
       </p>
+      <UnlockButton />
     </div>
   );
 }
@@ -39,7 +41,7 @@ export default function DashboardPage() {
     return null;
   }
 
-  const taskCount = (tasksQuery.data?.data || []).length;
+  const taskCount = (tasksQuery.data || []).length;
 
   return (
     <div className="min-h-screen bg-gray-50">

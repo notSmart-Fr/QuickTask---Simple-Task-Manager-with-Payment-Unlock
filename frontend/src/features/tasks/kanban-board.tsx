@@ -18,22 +18,17 @@ export function KanbanBoard() {
   }
 
   if (tasksQuery.isError) {
+    const errMsg = tasksQuery.error instanceof Error
+      ? tasksQuery.error.message
+      : String(tasksQuery.error);
     return (
       <div className="p-4 text-red-600">
-        Error loading tasks: {tasksQuery.error.message}
+        Error loading tasks: {errMsg}
       </div>
     );
   }
 
-  if (tasksQuery.data?.error) {
-    return (
-      <div className="p-4 text-red-600">
-        Error: {tasksQuery.data.error}
-      </div>
-    );
-  }
-
-  const tasks = tasksQuery.data?.data || [];
+  const tasks = tasksQuery.data || [];
 
   const groupedTasks = columns.reduce(
     (acc, col) => {

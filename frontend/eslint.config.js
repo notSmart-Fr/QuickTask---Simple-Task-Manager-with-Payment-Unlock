@@ -110,6 +110,22 @@ export default tseslint.config(
   // ──────────────────────────────────────────────────
 
   {
+    // Ban 17: try/catch is FORBIDDEN in core/ (domain logic uses Effect-TS)
+    // From: AGENTS.md §Effect-TS Rules
+    files: ["src/core/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "TryStatement",
+          message:
+            "try/catch is FORBIDDEN in core/. Use Effect.gen + Effect.tryPromise for async boundaries. See AGENTS.md §Effect-TS Rules.",
+        },
+      ],
+    },
+  },
+
+  {
     // Ban 10 + 14: Non-deterministic primitives in lib/ (shared frontend logic) (FM7)
     // Date.now(), Math.random(), crypto.randomUUID()
     files: ["src/lib/**/*.{ts,tsx}"],

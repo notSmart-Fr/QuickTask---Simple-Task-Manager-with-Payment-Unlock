@@ -1,56 +1,73 @@
-import { api, type ApiResponse } from '../../lib/api-client';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
-import type { Task, TaskStatus } from '../../schemas/task.schema';
+import { Effect, Either } from "effect";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
+import type { Task, TaskStatus } from "../../schemas/task.schema";
+import type { HttpError, NetworkError } from "../../core/errors";
+import {
+  fetchTasksEffect,
+  createTaskEffect,
+  deleteTaskEffect,
+  updateTaskStatusEffect,
+} from "../../core/api/task.effect";
 
-export function useTasks(): UseQueryResult<ApiResponse<Task[]>> {
+type TaskError = HttpError | NetworkError;
+
+function runEffect<T>(program: Effect.Effect<T, TaskError>): Promise<T> {
+  return Effect.runPromise(
+    Effect.either(program),
+  ).then((either) => {
+    if (Either.isLeft(either)) {
+      throw either.left;
+    }
+    return either.right;
+  });
+}
+
+export function useTasks(): UseQueryResult<Task[], TaskError> {
   return useQuery({
-    queryKey: ['tasks'],
-    queryFn: async () => api.get<Task[]>('/tasks'),
+    queryKey: ["tasks"],
+    queryFn: () => runEffect(fetchTasksEffect()),
     retry: false,
     refetchOnWindowFocus: false,
   });
 }
 
 export function useCreateTask(): UseMutationResult<
-  ApiResponse<Task>,
-  Error,
+  Task,
+  TaskError,
   { title: string; description: string }
 > {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data) => api.post<Task>('/tasks', data),
+    mutationFn: async (data) =>
+      runEffect(createTaskEffect(data.title, data.description)),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
 }
 
-export function useDeleteTask(): UseMutationResult<
-  ApiResponse<Task>,
-  Error,
-  string
-> {
+export function useDeleteTask(): UseMutationResult<Task, TaskError, string> {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (taskId) => api.delete<Task>(`/tasks/${taskId}`),
+    mutationFn: async (taskId) => runEffect(deleteTaskEffect(taskId)),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
 }
 
 export function useUpdateTaskStatus(): UseMutationResult<
-  ApiResponse<Task>,
-  Error,
+  Task,
+  TaskError,
   { taskId: string; status: TaskStatus }
 > {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ taskId, status }) => 
-      api.patch<Task>(`/tasks/${taskId}/status`, { status }),
+    mutationFn: async ({ taskId, status }) =>
+      runEffect(updateTaskStatusEffect(taskId, status)),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
 }

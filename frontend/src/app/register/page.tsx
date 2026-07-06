@@ -19,20 +19,15 @@ export default function RegisterPage() {
     registerMutation.mutate(
       { name, email, password },
       {
-        onSuccess: (result) => {
-          if (result.data) {
-            authLogin(result.data.user, result.data.token);
-            router.push('/dashboard');
-          }
+        onSuccess: (data) => {
+          authLogin(data.user, data.token);
+          router.push('/dashboard');
         },
       },
     );
   };
 
-  const errorMessage =
-    registerMutation.error instanceof Error
-      ? registerMutation.error.message
-      : registerMutation.data?.error;
+  const errorMessage = registerMutation.error?.message;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

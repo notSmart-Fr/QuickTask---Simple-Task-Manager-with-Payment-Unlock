@@ -1,9 +1,22 @@
+import { Effect, Data } from "effect";
 import type {
   UserRepositoryPort,
   PasswordHasherPort,
   TokenPort,
-} from './auth.port.js';
-import type { User } from './user.entity.js';
+} from "./auth.port.js";
+import type { User } from "./user.entity.js";
+
+// --------------- Typed domain errors ---------------
+
+export class EmailAlreadyRegistered extends Data.TaggedError(
+  "EmailAlreadyRegistered",
+)<Record<string, never>> {}
+
+export class InvalidCredentials extends Data.TaggedError(
+  "InvalidCredentials",
+)<Record<string, never>> {}
+
+// --------------- Service ---------------
 
 export class AuthService {
   constructor(
@@ -12,39 +25,77 @@ export class AuthService {
     private readonly tokenService: TokenPort,
   ) {}
 
-  async register(
+  register(
     name: string,
     email: string,
     password: string,
-  ): Promise<{ user: User; token: string }> {
-    const existingUser = await this.userRepo.findByEmail(email);
-    if (existingUser) {
-      throw new Error('Email already registered');
-    }
+  ): Effect.Effect<
+    { user: User; token: string },
+    EmailAlreadyRegistered | Error
+  > {
+    return Effect.gen(this, function* () {
+      const existingUser = yield* Effect.tryPromise({
+        try: () => this.userRepo.findByEmail(email),
+        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
+      });
 
-    const passwordHash = await this.hasher.hash(password);
-    const user = await this.userRepo.create({
-      name,
-      email,
-      passwordHash,
+      if (existingUser) {
+        return yield* Effect.fail(new EmailAlreadyRegistered({}));
+      }
+
+      const passwordHash = yield* Effect.tryPromise({
+        try: () => this.hasher.hash(password),
+        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
+      });
+
+      const user = yield* Effect.tryPromise({
+        try: () => this.userRepo.create({ name, email, passwordHash }),
+        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
+      });
+
+      const token = this.tokenService.sign(
+        user.id,
+        user.name,
+        user.email,
+        user.isPremium,
+      );
+      return { user, token };
     });
-
-    const token = this.tokenService.sign(user.id, user.name, user.email, user.isPremium);
-    return { user, token };
   }
 
-  async login(email: string, password: string): Promise<{ user: User; token: string }> {
-    const user = await this.userRepo.findByEmail(email);
-    if (!user) {
-      throw new Error('Invalid credentials');
-    }
+  login(
+    email: string,
+    password: string,
+  ): Effect.Effect<
+    { user: User; token: string },
+    InvalidCredentials | Error
+  > {
+    return Effect.gen(this, function* () {
+      const user = yield* Effect.tryPromise({
+        try: () => this.userRepo.findByEmail(email),
+        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
+      });
 
-    const valid = await this.hasher.compare(password, user.passwordHash);
-    if (!valid) {
-      throw new Error('Invalid credentials');
-    }
+      if (!user) {
+        return yield* Effect.fail(new InvalidCredentials({}));
+      }
 
-    const token = this.tokenService.sign(user.id, user.name, user.email, user.isPremium);
-    return { user, token };
+      const valid = yield* Effect.tryPromise({
+        try: () => this.hasher.compare(password, user.passwordHash),
+        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
+      });
+
+      if (!valid) {
+        return yield* Effect.fail(new InvalidCredentials({}));
+      }
+
+      const token = this.tokenService.sign(
+        user.id,
+        user.name,
+        user.email,
+        user.isPremium,
+      );
+      return { user, token };
+    });
   }
 }

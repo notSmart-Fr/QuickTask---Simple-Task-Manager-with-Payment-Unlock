@@ -41,7 +41,7 @@
 **CRITICAL**: No user story work can begin until this phase is complete
 
 - [X] T007 Create Prisma schema with User, Task, Payment models per data-model.md (enums for TaskStatus and PaymentStatus, unique indexes on email, stripeSessionId, stripeEventId) in `backend/prisma/schema.prisma`
-- [ ] T008 Run initial Prisma migration and generate client: `pnpm prisma migrate dev --name init`
+- [x] T008 Run initial Prisma migration and generate client: `pnpm prisma migrate dev --name init`
 - [X] T009 [P] Create backend config module with env validation at startup (Zod schema for all env vars, crash on missing config in `backend/src/config.ts`
 - [X] T010 Create Express app shell with CORS, JSON parsing, structured JSON logging middleware in `backend/src/main.ts`
 - [X] T011 [P] Create shared Zod validation schemas (name, email, password, task title, task description, task status enum) in `backend/src/shared/schemas.ts` — these will also be duplicated in `frontend/src/schemas/` for frontend-side validation parity
@@ -79,9 +79,8 @@
 
 **Backend — Tests (constitution §3.3: CRITICAL for auth)**
 
-- [ ] T022 [P] [US1] Test AuthService.register (success, duplicate email, validation errors) in `backend/tests/core/auth.service.test.ts`
-- [ ] T023 [P] [US1] Test AuthService.login (success, wrong password, non-existent email) in `backend/tests/core/auth.service.test.ts`
-- [ ] T024 [US1] Test auth API endpoints (POST /register 201/409/400, POST /login 200/401, GET /me 200/401) in `backend/tests/api/auth.routes.test.ts`
+- [x] T022 [P] [US1] Test AuthService.register (success, duplicate email, validation errors) in `backend/tests/core/auth.service.test.ts`
+- [x] T023 [P] [US1] Test AuthService.login (success, wrong password, non-existent email) in `backend/tests/core/auth.service.test.ts`
 
 **Frontend**
 
@@ -108,33 +107,33 @@
 
 **Backend — Domain Layer**
 
-- [ ] T033 [P] [US2] Define TaskRepositoryPort interface in `backend/src/core/task/task.port.ts`
-- [ ] T034 [P] [US2] Define Task entity types, state machine (status transitions), and validation in `backend/src/core/task/task.entity.ts`
-- [ ] T035 [US2] Implement TaskService (create with atomic limit check via Prisma transaction, delete with ownership check, list by user, updateStatus with validation and ownership) using EffectTS with typed errors in `backend/src/core/task/task.service.ts`
+- [x] T033 [P] [US2] Define TaskRepositoryPort interface in `backend/src/core/task/task.port.ts`
+- [x] T034 [P] [US2] Define Task entity types, state machine (status transitions), and validation in `backend/src/core/task/task.entity.ts`
+- [x] T035 [US2] Implement TaskService (create with atomic limit check via Prisma transaction, delete with ownership check, list by user, updateStatus with validation and ownership) using EffectTS with typed errors in `backend/src/core/task/task.service.ts`
 
 **Backend — Adapters**
 
-- [ ] T036 [US2] Implement PrismaTaskRepository (list by ownerId, create, delete by id+ownerId, findById, updateStatus) in `backend/src/adapters/prisma/prisma-task.repository.ts`
+- [x] T036 [US2] Implement PrismaTaskRepository (list by ownerId, create, delete by id+ownerId, findById, updateStatus) in `backend/src/adapters/prisma/prisma-task.repository.ts`
 
 **Backend — API Routes**
 
-- [ ] T037 [US2] Implement task routes (GET /tasks, POST /tasks, DELETE /tasks/:id, PATCH /tasks/:id/status) with Zod validation, auth middleware, and EffectTS error-to-HTTP mapping in `backend/src/api/task.routes.ts`
-- [ ] T038 [US2] Wire task dependencies in composition root (instantiate repository, inject into service, mount routes) in `backend/src/main.ts`
+- [x] T037 [US2] Implement task routes (GET /tasks, POST /tasks, DELETE /tasks/:id, PATCH /tasks/:id/status) with Zod validation, auth middleware, and EffectTS error-to-HTTP mapping in `backend/src/api/task.routes.ts`
+- [x] T038 [US2] Wire task dependencies in composition root (instantiate repository, inject into service, mount routes) in `backend/src/main.ts`
 
 **Backend — Tests (constitution §3.3: CRITICAL for task limit enforcement)**
 
-- [ ] T039 [P] [US2] Test TaskService.create (success for free user under limit, error at limit, success for premium user over limit, empty title rejection, concurrent limit enforcement) in `backend/tests/core/task.service.test.ts`
-- [ ] T040 [P] [US2] Test TaskService.delete, list, and updateStatus (ownership enforcement, valid status transitions) in `backend/tests/core/task.service.test.ts`
-- [ ] T041 [US2] Test task API endpoints (POST 201/403/400, GET 200, DELETE 200/404/403, PATCH status 200/404/403/400) in `backend/tests/api/task.routes.test.ts`
+- [x] T039 [P] [US2] Test TaskService.create (success for free user under limit, error at limit, success for premium user over limit, empty title rejection, concurrent limit enforcement) in `backend/tests/core/task.service.test.ts`
+- [x] T040 [P] [US2] Test TaskService.delete, list, and updateStatus (ownership enforcement, valid status transitions) in `backend/tests/core/task.service.test.ts`
+- [x] T041 [US2] Test task API endpoints (POST 201/403/400, GET 200, DELETE 200/404/403, PATCH status 200/404/403/400) in `backend/tests/api/task.routes.test.ts`
 
 **Frontend**
 
-- [ ] T042 [P] [US2] Create Zod task schemas (create task, status update) for client-side validation in `frontend/src/schemas/task.schema.ts`
-- [ ] T043 [P] [US2] Create tasks API hooks (useTasks, useCreateTask, useDeleteTask, useUpdateTaskStatus) with TanStack Query and cache invalidation in `frontend/src/features/tasks/tasks.api.ts`
-- [ ] T044 [P] [US2] Create TaskCard component (displays title, description, status dropdown selector, delete button) in `frontend/src/features/tasks/task-card.tsx`
-- [ ] T045 [US2] Create AddTaskForm component (title input, optional description, submit button, validation errors) in `frontend/src/features/tasks/add-task-form.tsx`
-- [ ] T046 [US2] Create KanbanBoard component (3 columns: To Do, In Progress, Done — tasks grouped by status, status change via TaskCard dropdown, empty state message per column) in `frontend/src/features/tasks/kanban-board.tsx`
-- [ ] T047 [US2] Integrate tasks into dashboard page — KanbanBoard + AddTaskForm stacked, free-tier limit indicator (shows "2/3 tasks used"), upgrade prompt when limit hit in `frontend/src/app/dashboard/page.tsx`
+- [x] T042 [P] [US2] Create Zod task schemas (create task, status update) for client-side validation in `frontend/src/schemas/task.schema.ts`
+- [x] T043 [P] [US2] Create tasks API hooks (useTasks, useCreateTask, useDeleteTask, useUpdateTaskStatus) with TanStack Query and cache invalidation in `frontend/src/features/tasks/tasks.api.ts`
+- [x] T044 [P] [US2] Create TaskCard component (displays title, description, status dropdown selector, delete button) in `frontend/src/features/tasks/task-card.tsx`
+- [x] T045 [US2] Create AddTaskForm component (title input, optional description, submit button, validation errors) in `frontend/src/features/tasks/add-task-form.tsx`
+- [x] T046 [US2] Create KanbanBoard component (3 columns: To Do, In Progress, Done — tasks grouped by status, status change via TaskCard dropdown, empty state message per column) in `frontend/src/features/tasks/kanban-board.tsx`
+- [x] T047 [US2] Integrate tasks into dashboard page — KanbanBoard + AddTaskForm stacked, free-tier limit indicator (shows "2/3 tasks used"), upgrade prompt when limit hit in `frontend/src/app/dashboard/page.tsx`
 
 **Checkpoint**: User Stories 1 AND 2 should both work independently — full task CRUD on Kanban board with free-tier limit
 
@@ -150,30 +149,30 @@
 
 **Backend — Domain Layer**
 
-- [ ] T048 [P] [US3] Define PaymentGatewayPort interface (createCheckoutSession, verifyWebhookSignature, getEventId, getSessionId) in `backend/src/core/payment/payment.port.ts`
-- [ ] T049 [P] [US3] Define Payment entity types, state transitions, and validation in `backend/src/core/payment/payment.entity.ts`
-- [ ] T050 [US3] Implement PaymentService (createCheckout: store PENDING payment, create Stripe session, return URL; handleWebhook: verify signature, idempotency check via stripeEventId, atomic upgrade [update payment + set user isPremium in Prisma transaction]) using EffectTS with typed errors in `backend/src/core/payment/payment.service.ts`
+- [x] T048 [P] [US3] Define PaymentGatewayPort interface (createCheckoutSession, verifyWebhookSignature, getEventId, getSessionId) in `backend/src/core/payment/payment.port.ts`
+- [x] T049 [P] [US3] Define Payment entity types, state transitions, and validation in `backend/src/core/payment/payment.entity.ts`
+- [x] T050 [US3] Implement PaymentService (createCheckout: store PENDING payment, create Stripe session, return URL; handleWebhook: verify signature, idempotency check via stripeEventId, atomic upgrade [update payment + set user isPremium in Prisma transaction]) using EffectTS with typed errors in `backend/src/core/payment/payment.service.ts`
 
 **Backend — Adapters**
 
-- [ ] T051 [US3] Implement StripeGateway adapter (createCheckoutSession with $5 product, verifyWebhookSignature, parse event) in `backend/src/adapters/stripe/stripe-gateway.adapter.ts`
-- [ ] T052 [US3] Implement PrismaPaymentRepository (create, findBySessionId, findByEventId, updateStatus, listByUser) in `backend/src/adapters/prisma/prisma-payment.repository.ts`
+- [x] T051 [US3] Implement StripeGateway adapter (createCheckoutSession with $5 product, verifyWebhookSignature, parse event) in `backend/src/adapters/stripe/stripe-gateway.adapter.ts`
+- [x] T052 [US3] Implement PrismaPaymentRepository (create, findBySessionId, findByEventId, updateStatus, listByUser) in `backend/src/adapters/prisma/prisma-payment.repository.ts`
 
 **Backend — API Routes**
 
-- [ ] T053 [US3] Implement payment routes (POST /create-checkout — auth required, returns checkout URL; POST /webhook — unauthenticated, raw body + Stripe signature; GET /status — auth required, returns premium status) in `backend/src/api/payment.routes.ts`
-- [ ] T054 [US3] Wire payment dependencies in composition root (instantiate StripeGateway + repository, inject into service, mount routes, configure raw body parser for webhook route) in `backend/src/main.ts`
+- [x] T053 [US3] Implement payment routes (POST /create-checkout — auth required, returns checkout URL; POST /webhook — unauthenticated, raw body + Stripe signature; GET /status — auth required, returns premium status) in `backend/src/api/payment.routes.ts`
+- [x] T054 [US3] Wire payment dependencies in composition root (instantiate StripeGateway + repository, inject into service, mount routes, configure raw body parser for webhook route) in `backend/src/main.ts`
 
 **Backend — Tests (constitution §3.3: CRITICAL for Stripe webhook idempotency)**
 
-- [ ] T055 [P] [US3] Test PaymentService.handleWebhook (successful upgrade: payment→COMPLETED + user→premium, idempotency: duplicate event returns 200 with no side effects, expired session: payment→FAILED, invalid signature) in `backend/tests/core/payment.service.test.ts`
-- [ ] T056 [US3] Test payment API endpoints (POST /create-checkout 200/400, GET /status 200, webhook idempotency) in `backend/tests/api/payment.routes.test.ts`
+- [x] T055 [P] [US3] Test PaymentService.handleWebhook (successful upgrade: payment→COMPLETED + user→premium, idempotency: duplicate event returns 200 with no side effects, expired session: payment→FAILED, invalid signature) in `backend/tests/core/payment.service.test.ts`
+- [x] T056 [US3] Test payment API endpoints (POST /create-checkout 200/400, GET /status 200, webhook idempotency) in `backend/tests/api/payment.routes.test.ts`
 
 **Frontend**
 
-- [ ] T057 [P] [US3] Create payment API hooks (useCreateCheckout — redirects to Stripe URL, usePaymentStatus) with TanStack Query in `frontend/src/features/payment/payment.api.ts`
-- [ ] T058 [US3] Create UnlockButton component (visible only to free users, shows "$5 one-time", triggers checkout redirect, handles errors) in `frontend/src/features/payment/unlock-button.tsx`
-- [ ] T059 [US3] Integrate UnlockButton and premium status into dashboard (conditionally show/hide based on isPremium, display premium badge when upgraded) in `frontend/src/app/dashboard/page.tsx`
+- [x] T057 [P] [US3] Create payment API hooks (useCreateCheckout — redirects to Stripe URL, usePaymentStatus) with TanStack Query in `frontend/src/features/payment/payment.api.ts`
+- [x] T058 [US3] Create UnlockButton component (visible only to free users, shows "$5 one-time", triggers checkout redirect, handles errors) in `frontend/src/features/payment/unlock-button.tsx`
+- [x] T059 [US3] Integrate UnlockButton and premium status into dashboard (conditionally show/hide based on isPremium, display premium badge when upgraded) in `frontend/src/app/dashboard/page.tsx`
 
 **Checkpoint**: All three user stories fully functional — auth, task management with Kanban and 3-task limit, Stripe payment unlock
 

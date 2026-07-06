@@ -9,6 +9,7 @@ export interface UserRepositoryPort {
   findByEmail(email: string): Promise<User | null>;
   findById(id: string): Promise<User | null>;
   updateToPremium(id: string): Promise<User>;
+  transaction<T>(fn: (txRepo: UserRepositoryPort) => Promise<T>): Promise<T>;
 }
 
 export interface PasswordHasherPort {

@@ -1,74 +1,105 @@
+import { Effect, Data } from "effect";
 import type { Task, TaskStatus, UserForTaskService } from "./task.entity.js";
 import type { TaskRepositoryPort } from "./task.port.js";
 import { FREE_TASK_LIMIT } from "./task.entity.js";
 
-export class TaskLimitError extends Error {
-  constructor(message: string = "Task limit reached") {
-    super(message);
-    this.name = "TaskLimitError";
-  }
-}
+// --------------- Typed domain errors ---------------
 
-export class TaskNotFoundError extends Error {
-  constructor(message: string = "Task not found") {
-    super(message);
-    this.name = "TaskNotFoundError";
-  }
-}
+export class TaskLimitReached extends Data.TaggedError("TaskLimitReached")<{
+  limit: number;
+}> {}
+
+export class TaskNotFound extends Data.TaggedError("TaskNotFound")<{
+  taskId: string;
+}> {}
+
+// --------------- Service ---------------
 
 export class TaskService {
   constructor(private readonly taskRepository: TaskRepositoryPort) {}
 
-  async createTask(
+  createTask(
     user: UserForTaskService,
-    data: { title: string; description: string }
-  ): Promise<Task> {
-    if (!user.isPremium) {
-      return this.taskRepository.transaction(async (tx) => {
-        const currentCount = await tx.countByOwnerId(user.id);
-        if (currentCount >= FREE_TASK_LIMIT) {
-          throw new TaskLimitError(
-            `Free users can only create ${String(FREE_TASK_LIMIT)} tasks. Upgrade to premium for unlimited tasks!`
-          );
-        }
-        return tx.create({ ...data, ownerId: user.id });
+    data: { title: string; description: string },
+  ): Effect.Effect<Task, TaskLimitReached | Error> {
+    if (user.isPremium) {
+      return Effect.tryPromise({
+        try: () => this.taskRepository.create({ ...data, ownerId: user.id }),
+        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
       });
     }
 
-    return this.taskRepository.create({
-      ...data,
-      ownerId: user.id,
+    return Effect.gen(this, function* () {
+      // ponytail: the transaction callback is plain async (Prisma API), so
+      // the limit check + create runs with regular await, and the whole wrapper
+      // is lifted into Effect via tryPromise.
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          this.taskRepository.transaction(async (tx) => {
+            const count = await tx.countByOwnerId(user.id);
+            if (count >= FREE_TASK_LIMIT) {
+              // Throw a typed marker through the promise boundary.
+              // tryPromise's catch will rewrap it — we detect it in the
+              // generator below via instanceof.
+              throw new TaskLimitReached({ limit: FREE_TASK_LIMIT });
+            }
+            return tx.create({ ...data, ownerId: user.id });
+          }),
+        catch: (e) => {
+          // Pass TaskLimitReached through so we can match it in the generator
+          if (e instanceof TaskLimitReached) return e;
+          return e instanceof Error ? e : new Error(String(e));
+        },
+      });
+
+      // Typed error branching in the Effect pipeline
+      if (result instanceof TaskLimitReached) {
+        return yield* Effect.fail(result);
+      }
+      return result;
     });
   }
 
-  async listTasks(user: UserForTaskService): Promise<Task[]> {
-    return this.taskRepository.listByOwnerId(user.id);
+  listTasks(user: UserForTaskService): Effect.Effect<Task[], Error> {
+    return Effect.tryPromise({
+      try: () => this.taskRepository.listByOwnerId(user.id),
+      catch: (e) => (e instanceof Error ? e : new Error(String(e))),
+    });
   }
 
-  async deleteTask(user: UserForTaskService, taskId: string): Promise<Task> {
-    const task = await this.taskRepository.deleteByIdAndOwnerId(
-      taskId,
-      user.id
-    );
-    if (!task) {
-      throw new TaskNotFoundError();
-    }
-    return task;
-  }
-
-  async updateTaskStatus(
+  deleteTask(
     user: UserForTaskService,
     taskId: string,
-    status: TaskStatus
-  ): Promise<Task> {
-    const task = await this.taskRepository.updateStatusByIdAndOwnerId(
-      taskId,
-      user.id,
-      status
-    );
-    if (!task) {
-      throw new TaskNotFoundError();
-    }
-    return task;
+  ): Effect.Effect<Task, TaskNotFound | Error> {
+    return Effect.gen(this, function* () {
+      const task = yield* Effect.tryPromise({
+        try: () => this.taskRepository.deleteByIdAndOwnerId(taskId, user.id),
+        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
+      });
+
+      if (!task) {
+        return yield* Effect.fail(new TaskNotFound({ taskId }));
+      }
+      return task;
+    });
+  }
+
+  updateTaskStatus(
+    user: UserForTaskService,
+    taskId: string,
+    status: TaskStatus,
+  ): Effect.Effect<Task, TaskNotFound | Error> {
+    return Effect.gen(this, function* () {
+      const task = yield* Effect.tryPromise({
+        try: () =>
+          this.taskRepository.updateStatusByIdAndOwnerId(taskId, user.id, status),
+        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
+      });
+
+      if (!task) {
+        return yield* Effect.fail(new TaskNotFound({ taskId }));
+      }
+      return task;
+    });
   }
 }

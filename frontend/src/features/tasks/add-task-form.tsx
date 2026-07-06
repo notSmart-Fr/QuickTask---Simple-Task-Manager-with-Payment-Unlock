@@ -8,6 +8,25 @@ interface AddTaskFormProps {
   onLimitError?: (message: string) => void;
 }
 
+function handleTaskError(
+  err: unknown,
+  onLimitError: ((message: string) => void) | undefined,
+  setError: (message: string) => void,
+): void {
+  const msg =
+    err instanceof Error ? err.message : "An unexpected error occurred";
+  const isApiError =
+    typeof err === "object" &&
+    err !== null &&
+    "_tag" in err &&
+    (err as { _tag: string })._tag === "HttpError";
+  if (isApiError) {
+    onLimitError?.(msg);
+  } else {
+    setError(msg);
+  }
+}
+
 export function AddTaskForm({ onLimitError }: AddTaskFormProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -18,25 +37,17 @@ export function AddTaskForm({ onLimitError }: AddTaskFormProps) {
     e.preventDefault();
     setError(null);
 
+    const validated = CreateTaskInputSchema.safeParse({ title, description });
+    if (!validated.success) {
+      setError("Invalid task data");
+      return;
+    }
     try {
-      const validated = CreateTaskInputSchema.parse({ title, description });
-      const result = await createTask.mutateAsync(validated);
-      if (result.error) {
-        if (result.error.includes('Free users')) {
-          onLimitError?.(result.error);
-        } else {
-          setError(result.error);
-        }
-      } else {
-        setTitle('');
-        setDescription('');
-      }
+      await createTask.mutateAsync(validated.data);
+      setTitle("");
+      setDescription("");
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('An unexpected error occurred');
-      }
+      handleTaskError(err, onLimitError, setError);
     }
   };
 

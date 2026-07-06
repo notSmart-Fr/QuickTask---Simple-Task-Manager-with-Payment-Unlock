@@ -1,6 +1,8 @@
-import { api, type ApiResponse } from '../../lib/api-client';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
+import { Effect, Either } from "effect";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
+import { registerEffect, loginEffect, fetchMeEffect } from "../../core/api/auth.effect";
+import type { HttpError, NetworkError } from "../../core/errors";
 
 export interface User {
   id: string;
@@ -14,30 +16,45 @@ export interface AuthResponse {
   token: string;
 }
 
+type AuthError = HttpError | NetworkError;
+
+function runEffect<T>(program: Effect.Effect<T, AuthError>): Promise<T> {
+  return Effect.runPromise(
+    Effect.either(program),
+  ).then((either) => {
+    if (Either.isLeft(either)) {
+      throw either.left;
+    }
+    return either.right;
+  });
+}
+
 export function useRegister(): UseMutationResult<
-  ApiResponse<AuthResponse>,
-  Error,
+  AuthResponse,
+  AuthError,
   { name: string; email: string; password: string }
 > {
   return useMutation({
-    mutationFn: async (data) => api.post<AuthResponse>('/auth/register', data),
+    mutationFn: async (data) =>
+      runEffect(registerEffect(data.name, data.email, data.password)),
   });
 }
 
 export function useLogin(): UseMutationResult<
-  ApiResponse<AuthResponse>,
-  Error,
+  AuthResponse,
+  AuthError,
   { email: string; password: string }
 > {
   return useMutation({
-    mutationFn: async (data) => api.post<AuthResponse>('/auth/login', data),
+    mutationFn: async (data) =>
+      runEffect(loginEffect(data.email, data.password)),
   });
 }
 
-export function useMe(): UseQueryResult<ApiResponse<User>> {
+export function useMe(): UseQueryResult<User, AuthError> {
   return useQuery({
-    queryKey: ['me'],
-    queryFn: async () => api.get<User>('/auth/me'),
+    queryKey: ["me"],
+    queryFn: () => runEffect(fetchMeEffect()),
     retry: false,
     refetchOnWindowFocus: false,
   });

@@ -18,20 +18,15 @@ export default function LoginPage() {
     loginMutation.mutate(
       { email, password },
       {
-        onSuccess: (result) => {
-          if (result.data) {
-            authLogin(result.data.user, result.data.token);
-            router.push('/dashboard');
-          }
+        onSuccess: (data) => {
+          authLogin(data.user, data.token);
+          router.push('/dashboard');
         },
       },
     );
   };
 
-  const errorMessage =
-    loginMutation.error instanceof Error
-      ? loginMutation.error.message
-      : loginMutation.data?.error;
+  const errorMessage = loginMutation.error?.message;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

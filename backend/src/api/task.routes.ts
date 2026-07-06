@@ -1,10 +1,12 @@
 import { Router } from "express";
 import { z } from "zod";
+import { Effect, Either } from "effect";
 import { TaskStatusSchema, TaskTitleSchema, TaskDescriptionSchema } from "../shared/schemas.js";
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 import type { TaskService } from "../core/task/task.service.js";
-import { TaskLimitError, TaskNotFoundError } from "../core/task/task.service.js";
 import { authMiddleware } from "./middleware/auth.middleware.js";
+
+// --------------- Zod boundary schemas ---------------
 
 const CreateTaskSchema = z.object({
   title: TaskTitleSchema,
@@ -15,72 +17,107 @@ const UpdateTaskStatusSchema = z.object({
   status: TaskStatusSchema,
 });
 
-// ponytail: narrow req.user (guaranteed present by authMiddleware) + req.params.id
+// --------------- Helpers ---------------
+
 function getUser(req: Request) {
   if (!req.user) throw new Error("Unauthorized");
   return { id: req.user.id, isPremium: req.user.isPremium };
 }
+
 function getParamId(req: Request): string {
   return req.params.id as string;
 }
+
+// --------------- Router ---------------
 
 export function createTaskRouter(taskService: TaskService) {
   const router = Router();
 
   router.use(authMiddleware);
 
-  // GET /api/v1/tasks - list user's tasks
-  router.get("/", async (req: Request, res: Response, _next: NextFunction) => {
-    const tasks = await taskService.listTasks(getUser(req));
-    res.json(tasks);
+  router.get("/", async (_req: Request, res: Response) => {
+    const user = getUser(_req);
+    const either = await Effect.runPromise(
+      Effect.either(taskService.listTasks(user)),
+    );
+
+    if (Either.isLeft(either)) {
+      console.error(either.left);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+    res.json(either.right);
   });
 
-  // POST /api/v1/tasks - create a task
-  router.post("/", async (req: Request, res: Response, _next: NextFunction) => {
-    const validatedData = CreateTaskSchema.parse(req.body);
-    try {
-      const task = await taskService.createTask(getUser(req), validatedData);
-      res.status(201).json(task);
-    } catch (error) {
-      if (error instanceof TaskLimitError) {
-        res.status(403).json({ error: error.message });
-      } else {
-        throw error;
-      }
+  router.post("/", async (req: Request, res: Response) => {
+    // Step 1: Zod at the boundary — validates shape, rejects with 400
+    const result = CreateTaskSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.errors[0]?.message ?? "Invalid input" });
     }
+
+    // Step 2: Effect.either converts typed domain errors to Either.left — runPromise never throws
+    const either = await Effect.runPromise(
+      Effect.either(
+        taskService.createTask(getUser(req), result.data),
+      ),
+    );
+
+    if (Either.isLeft(either)) {
+      // Step 3: Pattern match on _tag — typed, predictable error routing
+      if (either.left._tag === "TaskNotFound") {
+        return res.status(404).json({ error: `Task ${String(either.left.taskId)} not found` });
+      }
+      if (either.left._tag === "TaskLimitReached") {
+        return res.status(403).json({
+          error: `Free users can only create ${String(either.left.limit)} tasks. Upgrade to premium for unlimited tasks!`,
+        });
+      }
+      console.error(either.left);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+
+    res.status(201).json(either.right);
   });
 
-  // DELETE /api/v1/tasks/:id - delete a task
-  router.delete("/:id", async (req: Request, res: Response, _next: NextFunction) => {
-    try {
-      const task = await taskService.deleteTask(getUser(req), getParamId(req));
-      res.json(task);
-    } catch (error) {
-      if (error instanceof TaskNotFoundError) {
-        res.status(404).json({ error: error.message });
-      } else {
-        throw error;
+  router.delete("/:id", async (req: Request, res: Response) => {
+    const either = await Effect.runPromise(
+      Effect.either(
+        taskService.deleteTask(getUser(req), getParamId(req)),
+      ),
+    );
+
+    if (Either.isLeft(either)) {
+      if (either.left._tag === "TaskNotFound") {
+        return res.status(404).json({ error: `Task ${String(either.left.taskId)} not found` });
       }
+      console.error(either.left);
+      return res.status(500).json({ error: "Internal server error" });
     }
+
+    res.json(either.right);
   });
 
-  // PATCH /api/v1/tasks/:id/status - update task status
-  router.patch("/:id/status", async (req: Request, res: Response, _next: NextFunction) => {
-    const validatedData = UpdateTaskStatusSchema.parse(req.body);
-    try {
-      const task = await taskService.updateTaskStatus(
-        getUser(req),
-        getParamId(req),
-        validatedData.status
-      );
-      res.json(task);
-    } catch (error) {
-      if (error instanceof TaskNotFoundError) {
-        res.status(404).json({ error: error.message });
-      } else {
-        throw error;
-      }
+  router.patch("/:id/status", async (req: Request, res: Response) => {
+    const result = UpdateTaskStatusSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.errors[0]?.message ?? "Invalid input" });
     }
+
+    const either = await Effect.runPromise(
+      Effect.either(
+        taskService.updateTaskStatus(getUser(req), getParamId(req), result.data.status),
+      ),
+    );
+
+    if (Either.isLeft(either)) {
+      if (either.left._tag === "TaskNotFound") {
+        return res.status(404).json({ error: `Task ${String(either.left.taskId)} not found` });
+      }
+      console.error(either.left);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+
+    res.json(either.right);
   });
 
   return router;
