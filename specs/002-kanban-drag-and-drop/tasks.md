@@ -170,7 +170,7 @@
 
 - [x] T025 [P] Ensure status dropdown compatibility in `frontend/src/features/tasks/task-card.tsx` — verify dropdown `onChange` calls `updateTaskStatus` mutation WITHOUT position (task appends to bottom, FR-106); dropdown must coexist with drag handle (listeners only on drag handle area, not entire card)
 
-- [ ] T026 Run quickstart.md validation — execute all 9 scenarios from `specs/002-kanban-drag-and-drop/quickstart.md`; verify each passes end-to-end
+- [X] T026 Run quickstart.md validation — execute all 9 scenarios from `specs/002-kanban-drag-and-drop/quickstart.md`; verify each passes end-to-end
 
 - [x] T027 [P] Lint and typecheck — run `pnpm lint` and `pnpm typecheck` in both `backend/` and `frontend/`; fix all errors
 

@@ -54,7 +54,7 @@ Add drag-and-drop to the existing Kanban board so users can move tasks between c
 | 1.7 Data Integrity | PASS | Position renumbering within Prisma transaction; Zod validates position at boundary |
 | 1.8 Idempotency | PASS | Drag-to-same-position is no-op (FR-110); rapid drags discard intermediates |
 | 1.9 Backward Compatibility | PASS | New `position` field defaults to 0 for existing tasks; status dropdown still works (FR-106) |
-| 1.10 Resource Lifecycle | PASS | No new resources; Prisma transaction scope managed by existing patterns |
+| 1.10 Resource Lifecycle | PASS | No new resources introduced. Pre-existing gap (no SIGTERM/SIGINT handlers in main.ts) not worsened — fixed separately post-implementation via whitebox audit. |
 | 1.11 State Sanitization | PASS | No new sensitive data |
 | 1.12 Transaction Integrity | PASS | Position renumbering (select + update siblings + update target) wrapped in Prisma $transaction |
 | 1.13 Forward Migration Contracts | PASS | Prisma migration adds `position Int @default(0)` — expand-migrate-contract |
@@ -90,7 +90,7 @@ backend/
 │   │   └── task/
 │   │       ├── task.entity.ts     # MODIFIED: add position field
 │   │       ├── task.port.ts       # MODIFIED: updateStatus signature
-│   │       └── task.service.ts    # MODIFIED: position renumbering logic
+│   │       ├── task.service.ts    # MODIFIED: moveTask method for position renumbering
 │   ├── adapters/
 │   │   └── prisma/
 │   │       └── prisma-task.repository.ts  # MODIFIED: order by position, renumber
