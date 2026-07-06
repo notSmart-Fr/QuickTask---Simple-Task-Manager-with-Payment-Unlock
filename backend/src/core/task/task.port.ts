@@ -20,6 +20,7 @@ export interface TaskRepositoryPort {
     ownerId: string,
     status: TaskStatus,
     fromPosition: number,
+    toPosition: number | undefined,
     delta: number
   ): Promise<void>;
   countByOwnerId(ownerId: string): Promise<number>;

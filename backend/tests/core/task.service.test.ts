@@ -188,4 +188,68 @@ describe("TaskService.updateTaskStatus", () => {
       expect((either.left as { _tag: string })._tag).toBe("TaskNotFound");
     }
   });
+
+  it("reorders a task upward within the same column using a bounded shift", async () => {
+    const existing = makeTask({ status: "TODO", position: 3 });
+    const updated = makeTask({ status: "TODO", position: 1 });
+    const repo = makeRepo({
+      findByIdAndOwnerId: vi.fn().mockResolvedValue(existing),
+      listByOwnerIdAndStatus: vi.fn().mockResolvedValue([
+        makeTask({ id: "t1", position: 0 }),
+        makeTask({ id: "t2", position: 1 }),
+        makeTask({ id: "t3", position: 2 }),
+        existing,
+      ]),
+      shiftPositions: vi.fn().mockResolvedValue(undefined),
+      updateStatusByIdAndOwnerId: vi.fn().mockResolvedValue(updated),
+    });
+    const service = new TaskService(repo);
+
+    const either = await Effect.runPromise(
+      Effect.either(
+        service.updateTaskStatus(freeUser, "task-1", "TODO", 1),
+      ),
+    );
+
+    expect(Either.isRight(either)).toBe(true);
+    expect(repo.shiftPositions).toHaveBeenCalledWith("user-1", "TODO", 1, 2, 1);
+    expect(repo.updateStatusByIdAndOwnerId).toHaveBeenCalledWith(
+      "task-1",
+      "user-1",
+      "TODO",
+      1,
+    );
+  });
+
+  it("reorders a task downward within the same column using a bounded shift", async () => {
+    const existing = makeTask({ status: "TODO", position: 1 });
+    const updated = makeTask({ status: "TODO", position: 3 });
+    const repo = makeRepo({
+      findByIdAndOwnerId: vi.fn().mockResolvedValue(existing),
+      listByOwnerIdAndStatus: vi.fn().mockResolvedValue([
+        makeTask({ id: "t1", position: 0 }),
+        existing,
+        makeTask({ id: "t3", position: 2 }),
+        makeTask({ id: "t4", position: 3 }),
+      ]),
+      shiftPositions: vi.fn().mockResolvedValue(undefined),
+      updateStatusByIdAndOwnerId: vi.fn().mockResolvedValue(updated),
+    });
+    const service = new TaskService(repo);
+
+    const either = await Effect.runPromise(
+      Effect.either(
+        service.updateTaskStatus(freeUser, "task-1", "TODO", 3),
+      ),
+    );
+
+    expect(Either.isRight(either)).toBe(true);
+    expect(repo.shiftPositions).toHaveBeenCalledWith("user-1", "TODO", 2, 3, -1);
+    expect(repo.updateStatusByIdAndOwnerId).toHaveBeenCalledWith(
+      "task-1",
+      "user-1",
+      "TODO",
+      3,
+    );
+  });
 });

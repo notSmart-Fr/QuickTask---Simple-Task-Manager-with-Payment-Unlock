@@ -133,17 +133,41 @@ export class TaskService {
               const oldPos = task.position;
               if (targetPos < oldPos) {
                 // Shift tasks from targetPos to oldPos-1 to the right by 1
-                await tx.shiftPositions(user.id, newStatus, targetPos, 1);
+                await tx.shiftPositions(
+                  user.id,
+                  newStatus,
+                  targetPos,
+                  oldPos - 1,
+                  1,
+                );
               } else if (targetPos > oldPos) {
                 // Shift tasks from oldPos+1 to targetPos to the left by 1
-                await tx.shiftPositions(user.id, newStatus, oldPos + 1, -1);
+                await tx.shiftPositions(
+                  user.id,
+                  newStatus,
+                  oldPos + 1,
+                  targetPos,
+                  -1,
+                );
               }
             } else {
               // Different columns
               // Shift target column from targetPos right by 1
-              await tx.shiftPositions(user.id, newStatus, targetPos, 1);
+              await tx.shiftPositions(
+                user.id,
+                newStatus,
+                targetPos,
+                undefined,
+                1,
+              );
               // Shift source column from oldPos+1 left by 1
-              await tx.shiftPositions(user.id, task.status, task.position + 1, -1);
+              await tx.shiftPositions(
+                user.id,
+                task.status,
+                task.position + 1,
+                undefined,
+                -1,
+              );
             }
 
             // Update the task with new status and position

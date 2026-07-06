@@ -109,13 +109,17 @@ export class PrismaTaskRepository implements TaskRepositoryPort {
     ownerId: string,
     status: TaskStatus,
     fromPosition: number,
+    toPosition: number | undefined,
     delta: number
   ): Promise<void> {
     await this.prisma.task.updateMany({
       where: {
         ownerId,
         status,
-        position: { gte: fromPosition },
+        position: {
+          gte: fromPosition,
+          ...(toPosition === undefined ? {} : { lte: toPosition }),
+        },
       },
       data: { position: { increment: delta } },
     });
