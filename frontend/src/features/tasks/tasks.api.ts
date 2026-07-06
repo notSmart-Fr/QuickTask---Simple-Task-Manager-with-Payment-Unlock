@@ -76,9 +76,15 @@ export function useUpdateTaskStatus(): UseMutationResult<
       // Optimistically update status and position
       queryClient.setQueryData<Task[]>(["tasks"], (oldTasks) => {
         if (!oldTasks) return [];
-        const updated = oldTasks.map((t) =>
-          t.id === taskId ? { ...t, status, position: position ?? t.position } : t,
-        );
+        const updated = oldTasks.map((t) => {
+          if (t.id !== taskId) return t;
+          // When no explicit position is given (e.g. dropdown change), append
+          // to the target column — matches the server's default.
+          const optimisticPos = position !== undefined
+            ? position
+            : oldTasks.filter((ot) => ot.status === status).length;
+          return { ...t, status, position: optimisticPos };
+        });
         // Re-sort by status then position for immediate visual correctness
         const order: Record<string, number> = { TODO: 0, IN_PROGRESS: 1, DONE: 2 };
         updated.sort((a, b) => {
@@ -100,13 +106,19 @@ export function useUpdateTaskStatus(): UseMutationResult<
       }
     },
     // ponytail: Replace the moved task with the server's authoritative position
-    // directly in the cache — avoids the visual snap from refetching.
+    // and re-sort so surrounding tasks (whose positions the server may have shifted)
+    // are always in correct order — matches the optimistic sort in onMutate.
     onSuccess: (serverTask, { taskId }) => {
       queryClient.setQueryData<Task[]>(["tasks"], (oldTasks) => {
         if (!oldTasks) return [];
-        return oldTasks.map((t) =>
-          t.id === taskId ? serverTask : t,
-        );
+        const updated = oldTasks.map((t) => (t.id === taskId ? serverTask : t));
+        const order: Record<string, number> = { TODO: 0, IN_PROGRESS: 1, DONE: 2 };
+        return updated.sort((a, b) => {
+          const sa = order[a.status] ?? 0;
+          const sb = order[b.status] ?? 0;
+          if (sa !== sb) return sa - sb;
+          return a.position - b.position;
+        });
       });
     },
   });

@@ -31,13 +31,13 @@ const COLUMNS: { status: TaskStatus; label: string }[] = [
 
 // ── Sub-components ──
 
-function DroppableColumn({ status, label, isEmpty, children }: { status: TaskStatus; label: string; isEmpty: boolean; children: React.ReactNode }) {
+function DroppableColumn({ status, label, children }: { status: TaskStatus; label: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
     <div ref={setNodeRef} className={`bg-gray-100 rounded-lg p-4 transition-colors ${isOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}>
       <h3 className="font-semibold text-gray-800 mb-3">{label}</h3>
       {children}
-      {isOver && isEmpty && (
+      {isOver && (
         <div className="h-16 border-2 border-dashed border-blue-400 rounded-lg bg-blue-50 flex items-center justify-center">
           <p className="text-blue-500 text-sm">Drop here</p>
         </div>
@@ -74,28 +74,20 @@ function calcDropPosition(
   tasks: Task[],
   activeTask: Task,
   overId: string,
-  overRect: { top: number; height: number } | undefined,
-  deltaY: number,
-  activatorEvent: Event,
+  overRect: { top: number; height: number },
+  pointerY: number,
 ): { status: TaskStatus; position: number } | null {
-  // Drop on a column (empty space or header area) → append to end
+  // Drop on a column → pointer in top half = position 0, bottom half = append
   if (COLUMNS.some((c) => c.status === overId)) {
-    const newStatus = overId as TaskStatus;
-    return { status: newStatus, position: tasks.filter((t) => t.status === newStatus).length };
+    const columnTasks = tasks.filter((t) => t.status === overId);
+    const pos = columnTasks.length === 0 ? 0 : pointerY < overRect.top + overRect.height / 2 ? 0 : columnTasks.length;
+    return { status: overId as TaskStatus, position: pos };
   }
 
   // Drop on a task card → 50% threshold determines insert-before or insert-after
   const overTask = tasks.find((t) => t.id === overId);
   if (!overTask || overTask.id === activeTask.id) return null;
-
-  // ponytail: fallback when rect isn't available (keyboard navigation, SSR hydration)
-  if (!overRect) return { status: overTask.status, position: overTask.position };
-
-  // Current pointer Y = activation point + cumulative drag delta
-  const pointerY = (activatorEvent as PointerEvent).clientY + deltaY;
-  const midpointY = overRect.top + overRect.height / 2;
-  const targetPos = pointerY > midpointY ? overTask.position + 1 : overTask.position;
-
+  const targetPos = pointerY > overRect.top + overRect.height / 2 ? overTask.position + 1 : overTask.position;
   return { status: overTask.status, position: targetPos };
 }
 
@@ -131,9 +123,9 @@ export function KanbanBoard() {
     const tasks = tasksQuery.data ?? [];
     const activeTask = tasks.find((t) => t.id === active.id);
     if (!activeTask) return;
-    const target = calcDropPosition(tasks, activeTask, over.id.toString(), over.rect, delta.y, activatorEvent);
-    if (!target) return;
-    if (activeTask.status === target.status && activeTask.position === target.position) return;
+    const pointerY = (activatorEvent as PointerEvent).clientY + delta.y;
+    const target = calcDropPosition(tasks, activeTask, over.id.toString(), over.rect, pointerY);
+    if (!target || (activeTask.status === target.status && activeTask.position === target.position)) return;
     updateTask.mutate({ taskId: activeTask.id, status: target.status, position: target.position });
   };
 
@@ -154,7 +146,7 @@ export function KanbanBoard() {
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {COLUMNS.map((col) => (
-          <DroppableColumn key={col.status} status={col.status} label={col.label} isEmpty={groupedTasks[col.status].length === 0}>
+          <DroppableColumn key={col.status} status={col.status} label={col.label}>
             <SortableContext items={groupedTasks[col.status].map((t) => t.id)} strategy={verticalListSortingStrategy}>
               {groupedTasks[col.status].length === 0
                 ? <p className="text-gray-500 text-sm">No tasks</p>
