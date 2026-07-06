@@ -19,7 +19,15 @@ export class PrismaTaskRepository implements TaskRepositoryPort {
   async listByOwnerId(ownerId: string): Promise<Task[]> {
     const tasks = await this.prisma.task.findMany({
       where: { ownerId },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ status: "asc" }, { position: "asc" }],
+    });
+    return tasks.map((t) => this.toDomainTask(t));
+  }
+
+  async listByOwnerIdAndStatus(ownerId: string, status: TaskStatus): Promise<Task[]> {
+    const tasks = await this.prisma.task.findMany({
+      where: { ownerId, status },
+      orderBy: { position: "asc" },
     });
     return tasks.map((t) => this.toDomainTask(t));
   }
@@ -29,11 +37,15 @@ export class PrismaTaskRepository implements TaskRepositoryPort {
     description: string;
     ownerId: string;
   }): Promise<Task> {
+    const count = await this.prisma.task.count({
+      where: { ownerId: data.ownerId, status: "TODO" },
+    });
     const task = await this.prisma.task.create({
       data: {
         title: data.title,
         description: data.description,
         ownerId: data.ownerId,
+        position: count,
       },
     });
     return this.toDomainTask(task);
@@ -46,6 +58,15 @@ export class PrismaTaskRepository implements TaskRepositoryPort {
     try {
       const task = await this.prisma.task.delete({
         where: { id, ownerId },
+      });
+      // Shift remaining tasks in the same column down by 1
+      await this.prisma.task.updateMany({
+        where: {
+          ownerId,
+          status: task.status,
+          position: { gt: task.position },
+        },
+        data: { position: { decrement: 1 } },
       });
       return this.toDomainTask(task);
     } catch {
@@ -66,17 +87,38 @@ export class PrismaTaskRepository implements TaskRepositoryPort {
   async updateStatusByIdAndOwnerId(
     id: string,
     ownerId: string,
-    status: TaskStatus
+    status: TaskStatus,
+    position?: number
   ): Promise<Task | null> {
     try {
+      const updateData: Prisma.TaskUpdateInput = { status };
+      if (position !== undefined) {
+        updateData.position = position;
+      }
       const task = await this.prisma.task.update({
         where: { id, ownerId },
-        data: { status },
+        data: updateData,
       });
       return this.toDomainTask(task);
     } catch {
       return null;
     }
+  }
+
+  async shiftPositions(
+    ownerId: string,
+    status: TaskStatus,
+    fromPosition: number,
+    delta: number
+  ): Promise<void> {
+    await this.prisma.task.updateMany({
+      where: {
+        ownerId,
+        status,
+        position: { gte: fromPosition },
+      },
+      data: { position: { increment: delta } },
+    });
   }
 
   async countByOwnerId(ownerId: string): Promise<number> {
@@ -91,6 +133,7 @@ export class PrismaTaskRepository implements TaskRepositoryPort {
       title: prismaTask.title,
       description: prismaTask.description,
       status: prismaTask.status,
+      position: prismaTask.position,
       ownerId: prismaTask.ownerId,
       createdAt: prismaTask.createdAt,
       updatedAt: prismaTask.updatedAt,

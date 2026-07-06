@@ -5,6 +5,7 @@ export interface Task {
   title: string;
   description: string;
   status: TaskStatus;
+  position: number;
   ownerId: string;
   createdAt: Date;
   updatedAt: Date;

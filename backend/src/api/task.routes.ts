@@ -1,7 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import { Effect, Either } from "effect";
-import { TaskStatusSchema, TaskTitleSchema, TaskDescriptionSchema } from "../shared/schemas.js";
+import {
+  TaskTitleSchema,
+  TaskDescriptionSchema,
+  UpdateTaskStatusInputSchema,
+} from "../shared/schemas.js";
 import type { Request, Response } from "express";
 import type { TaskService } from "../core/task/task.service.js";
 import { authMiddleware } from "./middleware/auth.middleware.js";
@@ -13,9 +17,7 @@ const CreateTaskSchema = z.object({
   description: TaskDescriptionSchema,
 });
 
-const UpdateTaskStatusSchema = z.object({
-  status: TaskStatusSchema,
-});
+const UpdateTaskStatusSchema = UpdateTaskStatusInputSchema;
 
 // --------------- Helpers ---------------
 
@@ -102,7 +104,7 @@ export function createTaskRouter(taskService: TaskService) {
 
     const either = await Effect.runPromise(
       Effect.either(
-        taskService.updateTaskStatus(getUser(req), getParamId(req), result.data.status),
+        taskService.updateTaskStatus(getUser(req), getParamId(req), result.data.status, result.data.position),
       ),
     );
 

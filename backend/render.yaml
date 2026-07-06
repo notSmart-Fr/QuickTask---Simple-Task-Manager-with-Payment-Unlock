@@ -1,0 +1,28 @@
+# Render Blueprint — one-click deploy for the QuickTask backend
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: quicktask-api
+    env: node
+    region: singapore  # closest to Dhaka
+    plan: free
+    rootDir: backend
+    buildCommand: npm install -g pnpm && pnpm install && npx prisma generate
+    startCommand: pnpm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: DATABASE_URL
+        sync: false  # set manually in Render dashboard
+      - key: JWT_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false  # your Vercel frontend URL, e.g. https://quicktask.vercel.app

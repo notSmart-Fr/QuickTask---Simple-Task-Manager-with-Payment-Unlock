@@ -25,3 +25,33 @@ export const TaskDescriptionSchema = z
   .max(2000, "Description must be ≤ 2000 characters")
   .optional()
   .default("");
+
+export const TaskPositionSchema = z.number().int().nonnegative().default(0);
+
+export const CreateTaskInputSchema = z.object({
+  title: TaskTitleSchema,
+  description: TaskDescriptionSchema,
+});
+
+export const UpdateTaskStatusInputSchema = z.object({
+  status: TaskStatusSchema,
+  position: TaskPositionSchema.optional(),
+});
+
+export const TaskResponseSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  status: TaskStatusSchema,
+  position: TaskPositionSchema,
+  ownerId: z.string(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+
+export const ListTasksResponseSchema = z.object({
+  tasks: z.array(TaskResponseSchema),
+  total: z.number(),
+  limit: z.number(),
+  isPremium: z.boolean(),
+});

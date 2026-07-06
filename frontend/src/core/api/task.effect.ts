@@ -26,6 +26,11 @@ export function deleteTaskEffect(
 export function updateTaskStatusEffect(
   taskId: string,
   status: TaskStatus,
+  position?: number,
 ): Effect.Effect<Task, HttpError | NetworkError> {
-  return effectApi.patch<Task>(`/tasks/${taskId}/status`, { status });
+  const body: { status: TaskStatus; position?: number } = { status };
+  if (position !== undefined) {
+    body.position = position;
+  }
+  return effectApi.patch<Task>(`/tasks/${taskId}/status`, body);
 }

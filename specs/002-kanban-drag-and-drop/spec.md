@@ -16,6 +16,12 @@
 - Q: Should task position be a simple integer or support gaps for efficient reordering? → A: Simple integer position. Tasks within each column are ordered by a numeric position field. When a task moves, positions are reassigned sequentially (0, 1, 2, ...) within the affected columns. No fractional positioning — simple and predictable.
 - Q: Should a newly created task appear at the top or bottom of the "To Do" column? → A: Bottom. New tasks get position `max+1` (the last position in the column). Existing tasks stay in place — no renumbering on create. This matches standard Kanban behavior (Trello, Jira, Linear).
 
+### Session 2026-07-07
+
+- Q: How should the error message be displayed when a drag operation fails? → A: Toast notification — non-blocking, auto-dismissing floating message (3s).
+- Q: What opacity should the dragged card have during drag? → A: opacity 0.5 (50%). Balanced: visible yet clearly distinct.
+- Q: How long should the error toast be visible before auto-dismissing? → A: 3 seconds. Long enough to read, short enough not to obstruct.
+
 ## User Scenarios & Testing
 
 ### User Story 1 - Drag Tasks Between Columns (Priority: P1)
@@ -78,7 +84,7 @@ An authenticated user wants to drag a task from one column to a specific positio
 
 ### Edge Cases
 
-- **Network failure during drag**: If the API call to persist a drag operation fails, the task snaps back to its original position and the user sees an error message. No optimistic update persists incorrectly.
+- **Network failure during drag**: If the API call to persist a drag operation fails, the task snaps back to its original position and the user sees a 3s auto-dismissing toast notification. No optimistic update persists incorrectly.
 
 - **Concurrent drags from the same user**: If a user opens two browser tabs and drags in both, the last write wins. Tasks will reflect whichever drag completed last. This is acceptable for a personal task manager.
 
@@ -102,9 +108,9 @@ An authenticated user wants to drag a task from one column to a specific positio
 
 - **FR-103**: System MUST persist all drag-and-drop changes (status + position) to the server immediately upon drop. Changes must survive page refresh.
 
-- **FR-104**: System MUST provide visual feedback during a drag: the dragged card should appear lifted (slightly transparent, shadow) and the target drop zone should highlight.
+- **FR-104**: System MUST provide visual feedback during a drag: the dragged card should appear lifted (opacity 0.5, shadow) and the target drop zone should highlight.
 
-- **FR-105**: System MUST revert the visual position if the server update fails, snapping the task back to its pre-drag location, and display an error message.
+- **FR-105**: System MUST revert the visual position if the server update fails, snapping the task back to its pre-drag location, and display a toast notification error message.
 
 - **FR-106**: System MUST retain the existing status dropdown on each task card as an alternative interaction method for accessibility and mobile users.
 

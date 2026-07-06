@@ -60,13 +60,38 @@ export function useDeleteTask(): UseMutationResult<Task, TaskError, string> {
 export function useUpdateTaskStatus(): UseMutationResult<
   Task,
   TaskError,
-  { taskId: string; status: TaskStatus }
+  { taskId: string; status: TaskStatus; position?: number }
 > {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ taskId, status }) =>
-      runEffect(updateTaskStatusEffect(taskId, status)),
-    onSuccess: () => {
+    mutationFn: async ({ taskId, status, position }) =>
+      runEffect(updateTaskStatusEffect(taskId, status, position)),
+    onMutate: async ({ taskId, status }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+
+      // Snapshot the previous value
+      const previousTasks = queryClient.getQueryData<Task[]>(["tasks"]);
+
+      // Optimistically update status only — let server refetch handle exact position
+      queryClient.setQueryData<Task[]>(["tasks"], (oldTasks) => {
+        if (!oldTasks) return [];
+        return oldTasks.map((t) =>
+          t.id === taskId ? { ...t, status } : t,
+        );
+      });
+
+      // Return a context object with the snapshotted value
+      return { previousTasks };
+    },
+    onError: (_err, _variables, context) => {
+      // Rollback to the previous value
+      if (context?.previousTasks) {
+        queryClient.setQueryData(["tasks"], context.previousTasks);
+      }
+    },
+    onSettled: () => {
+      // Always refetch after error or success
       void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
