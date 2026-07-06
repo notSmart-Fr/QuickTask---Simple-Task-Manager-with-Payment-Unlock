@@ -58,10 +58,12 @@ export function AddTaskForm({ onLimitError }: AddTaskFormProps) {
         <div className="mb-3 p-2 bg-red-100 text-red-700 rounded">{error}</div>
       )}
       <div className="mb-3">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="task-title" className="block text-sm font-medium text-gray-700 mb-1">
           Title
         </label>
         <input
+          id="task-title"
+          name="title"
           type="text"
           value={title}
           onChange={(e) => { setTitle(e.target.value); }}
@@ -71,10 +73,12 @@ export function AddTaskForm({ onLimitError }: AddTaskFormProps) {
         />
       </div>
       <div className="mb-3">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="task-description" className="block text-sm font-medium text-gray-700 mb-1">
           Description (optional)
         </label>
         <textarea
+          id="task-description"
+          name="description"
           value={description}
           onChange={(e) => { setDescription(e.target.value); }}
           className="w-full px-3 py-2 border rounded-md"

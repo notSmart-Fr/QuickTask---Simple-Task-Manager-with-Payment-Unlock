@@ -8,6 +8,7 @@
     "start": "node dist/main.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "seed": "tsx prisma/seed.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.ts\" --fix --no-error-on-unmatched-pattern",
     "knip": "knip"

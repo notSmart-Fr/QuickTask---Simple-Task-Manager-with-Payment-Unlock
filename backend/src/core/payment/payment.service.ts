@@ -57,15 +57,13 @@ export class PaymentService {
   ): Effect.Effect<void, WebhookVerificationFailed | PaymentRecordNotFound | Error> {
     return Effect.gen(this, function* () {
       // Verify signature
-      const event = yield* Effect.tryPromise({
-        try: () =>
-          this.stripeGateway.verifyWebhookSignature(body, signature),
-        catch: (e) => {
-          // Stripe webhook throws on invalid signature — typed domain error
-          return new WebhookVerificationFailed({
+      // verifyWebhookSignature is synchronous but can throw
+      const event = yield* Effect.try({
+        try: () => this.stripeGateway.verifyWebhookSignature(body, signature),
+        catch: (e) =>
+          new WebhookVerificationFailed({
             message: e instanceof Error ? e.message : "Invalid signature",
-          });
-        },
+          }),
       });
 
       const eventId = this.stripeGateway.getEventId(event);

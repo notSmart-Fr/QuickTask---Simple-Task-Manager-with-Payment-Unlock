@@ -34,7 +34,7 @@ export function createAuthRouter(authService: AuthService) {
     );
 
     if (Either.isLeft(either)) {
-      if (either.left._tag === "EmailAlreadyRegistered") {
+      if ("_tag" in either.left) {
         return res.status(409).json({ error: "Email already registered" });
       }
       console.error(either.left);
@@ -61,7 +61,7 @@ export function createAuthRouter(authService: AuthService) {
     );
 
     if (Either.isLeft(either)) {
-      if (either.left._tag === "InvalidCredentials") {
+      if ("_tag" in either.left) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
       console.error(either.left);

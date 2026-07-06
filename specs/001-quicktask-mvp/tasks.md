@@ -182,13 +182,13 @@
 
 **Purpose**: Final touches, code quality, and validation
 
-- [ ] T060 [P] Validate all input forms display clear error messages within 1s of submission (per SC-008) across `frontend/src/features/auth/` and `frontend/src/features/tasks/`
-- [ ] T061 [P] Add responsive Tailwind styles to all pages (mobile-first check: landing, login, register, dashboard) in `frontend/src/app/`
-- [ ] T062 [P] Add Prisma seed script with test data for demo (free user with 3 tasks, premium user with 5 tasks) in `backend/prisma/seed.ts`
-- [ ] T063 [P] Create backend README with setup/run instructions in `backend/README.md`
-- [ ] T064 [P] Create frontend README with setup/run instructions in `frontend/README.md`
+- [x] T060 [P] Validate all input forms display clear error messages within 1s of submission (per SC-008) across `frontend/src/features/auth/` and `frontend/src/features/tasks/`
+- [x] T061 [P] Add responsive Tailwind styles to all pages (mobile-first check: landing, login, register, dashboard) in `frontend/src/app/`
+- [x] T062 [P] Add Prisma seed script with test data for demo (free user with 3 tasks, premium user with 5 tasks) in `backend/prisma/seed.ts`
+- [x] T063 [P] Create backend README with setup/run instructions in `backend/README.md`
+- [x] T064 [P] Create frontend README with setup/run instructions in `frontend/README.md`
 - [ ] T065 Run full quickstart.md validation scenarios (all 4 scenarios, 30 test cases) end-to-end, including informal timing checks against SC-001 through SC-005 (register < 1min, login < 5s, task create < 2s, limit error < 2s, payment flow < 3min)
-- [ ] T066 Run constitution quality gates: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` — all must pass with zero errors
+- [x] T066 Run constitution quality gates: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` — all must pass with zero errors
 
 ---
 

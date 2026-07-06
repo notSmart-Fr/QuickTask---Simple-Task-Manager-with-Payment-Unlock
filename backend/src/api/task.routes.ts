@@ -64,10 +64,7 @@ export function createTaskRouter(taskService: TaskService) {
 
     if (Either.isLeft(either)) {
       // Step 3: Pattern match on _tag — typed, predictable error routing
-      if (either.left._tag === "TaskNotFound") {
-        return res.status(404).json({ error: `Task ${String(either.left.taskId)} not found` });
-      }
-      if (either.left._tag === "TaskLimitReached") {
+      if ("_tag" in either.left) {
         return res.status(403).json({
           error: `Free users can only create ${String(either.left.limit)} tasks. Upgrade to premium for unlimited tasks!`,
         });
@@ -87,8 +84,8 @@ export function createTaskRouter(taskService: TaskService) {
     );
 
     if (Either.isLeft(either)) {
-      if (either.left._tag === "TaskNotFound") {
-        return res.status(404).json({ error: `Task ${String(either.left.taskId)} not found` });
+      if ("_tag" in either.left) {
+        return res.status(404).json({ error: `Task ${either.left.taskId} not found` });
       }
       console.error(either.left);
       return res.status(500).json({ error: "Internal server error" });
@@ -110,8 +107,8 @@ export function createTaskRouter(taskService: TaskService) {
     );
 
     if (Either.isLeft(either)) {
-      if (either.left._tag === "TaskNotFound") {
-        return res.status(404).json({ error: `Task ${String(either.left.taskId)} not found` });
+      if ("_tag" in either.left) {
+        return res.status(404).json({ error: `Task ${either.left.taskId} not found` });
       }
       console.error(either.left);
       return res.status(500).json({ error: "Internal server error" });

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { AddTaskForm } from '../../features/tasks/add-task-form';
@@ -28,6 +28,12 @@ export default function DashboardPage() {
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const tasksQuery = useTasks();
 
+  useEffect(() => {
+    if (!user) {
+      router.push('/login');
+    }
+  }, [user, router]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -37,7 +43,6 @@ export default function DashboardPage() {
   }
 
   if (!user) {
-    router.push('/login');
     return null;
   }
 

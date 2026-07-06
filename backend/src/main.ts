@@ -41,7 +41,12 @@ app.use(
     origin: config.FRONTEND_URL,
   }),
 );
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    // Capture raw body for Stripe webhook signature verification
+    (req as unknown as { rawBody: Buffer }).rawBody = buf;
+  },
+}));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

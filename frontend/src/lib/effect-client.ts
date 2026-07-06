@@ -12,7 +12,7 @@ function getAuthHeaders(
     ...headers,
   };
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("auth_token");
     if (token) {
       authHeaders["Authorization"] = `Bearer ${token}`;
     }

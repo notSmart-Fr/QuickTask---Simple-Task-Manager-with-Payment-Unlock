@@ -1,9 +1,8 @@
-import { Router, type Request, type Response, type RequestHandler } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { Effect, Either } from "effect";
 import type { PaymentService } from "../core/payment/payment.service.js";
 import { authMiddleware } from "./middleware/auth.middleware.js";
-import express from "express";
 
 const CreateCheckoutSchema = z.object({
   successUrl: z.string().url(),
@@ -14,13 +13,6 @@ function getUser(req: Request) {
   if (!req.user) throw new Error("Unauthorized");
   return { id: req.user.id, isPremium: req.user.isPremium };
 }
-
-// Typed raw body parser for Stripe webhook signature verification.
-// express.raw returns a RequestHandler with Buffer body.
-const rawBodyParser: RequestHandler = express.raw({
-  type: "application/json",
-  limit: "1mb",
-});
 
 export function createPaymentRouter(paymentService: PaymentService) {
   const router = Router();
@@ -48,7 +40,11 @@ export function createPaymentRouter(paymentService: PaymentService) {
 
       if (Either.isLeft(either)) {
         console.error(either.left);
-        return res.status(500).json({ error: "Internal server error" });
+        return res
+          .status(500)
+          .json({
+            error: either.left instanceof Error ? either.left.message : "Internal server error",
+          });
       }
 
       res.status(201).json({ checkoutUrl: either.right });
@@ -57,7 +53,6 @@ export function createPaymentRouter(paymentService: PaymentService) {
 
   router.post(
     "/webhook",
-    rawBodyParser,
     async (req: Request, res: Response) => {
       const signature = req.headers["stripe-signature"];
       if (typeof signature !== "string") {
@@ -66,23 +61,22 @@ export function createPaymentRouter(paymentService: PaymentService) {
           .json({ error: "Missing stripe-signature header" });
       }
 
-      // express.raw gives us a Buffer in req.body
-      const rawBody = Buffer.from(req.body as ArrayBuffer);
+      // Use the raw body captured by express.json() verify callback
+      const rawBody = (req as { rawBody?: Buffer }).rawBody as Buffer;
 
       const either = await Effect.runPromise(
         Effect.either(paymentService.handleWebhook(rawBody, signature)),
       );
 
       if (Either.isLeft(either)) {
-        if (either.left._tag === "WebhookVerificationFailed") {
-          return res.status(400).json({ error: either.left.message });
-        }
-        if (either.left._tag === "PaymentRecordNotFound") {
-          return res
-            .status(404)
-            .json({
-              error: `Payment not found for session ${String(either.left.sessionId)}`,
-            });
+        const error = either.left;
+        if ("_tag" in error) {
+          switch (error._tag) {
+            case "WebhookVerificationFailed":
+              return res.status(400).json({ error: error.message });
+            case "PaymentRecordNotFound":
+              return res.status(404).json({ error: `Payment not found for session ${error.sessionId}` });
+          }
         }
         console.error(either.left);
         return res.status(500).json({ error: "Internal server error" });

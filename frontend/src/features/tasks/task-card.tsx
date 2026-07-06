@@ -40,16 +40,21 @@ export function TaskCard({ task }: TaskCardProps) {
         <p className="text-sm text-gray-600 mb-3">{task.description}</p>
       )}
       <div className="flex items-center justify-between gap-2">
-        <select
-          value={task.status}
-          onChange={(e) => { void handleStatusChange(e.target.value as TaskStatus); }}
-          className="text-sm border rounded px-2 py-1"
-          disabled={updateStatus.isPending}
-        >
+        <div>
+          <label htmlFor={`task-status-${task.id}`} className="sr-only">Status</label>
+          <select
+            id={`task-status-${task.id}`}
+            name="status"
+            value={task.status}
+            onChange={(e) => { void handleStatusChange(e.target.value as TaskStatus); }}
+            className="text-sm border rounded px-2 py-1"
+            disabled={updateStatus.isPending}
+          >
           <option value="TODO">{statusLabels.TODO}</option>
           <option value="IN_PROGRESS">{statusLabels.IN_PROGRESS}</option>
           <option value="DONE">{statusLabels.DONE}</option>
         </select>
+        </div>
         <button
           onClick={() => { void handleDelete(); }}
           disabled={isDeleting || deleteTask.isPending}

@@ -1,0 +1,153 @@
+# Tasks API (Updated: Drag-and-Drop)
+
+Base URL: `{backend}/api/v1/tasks`
+
+All endpoints require `Authorization: Bearer <token>`.
+
+## GET /tasks
+
+List all tasks for the authenticated user, ordered by status then position.
+
+**Response 200**:
+```json
+{
+  "tasks": [
+    {
+      "id": "uuid",
+      "title": "Set up project",
+      "description": "Initialize repo and install deps",
+      "status": "TODO",
+      "position": 0,
+      "createdAt": "2026-07-06T10:00:00.000Z"
+    },
+    {
+      "id": "uuid",
+      "title": "Write tests",
+      "description": "",
+      "status": "TODO",
+      "position": 1,
+      "createdAt": "2026-07-06T09:00:00.000Z"
+    },
+    {
+      "id": "uuid",
+      "title": "Review PR",
+      "description": "",
+      "status": "IN_PROGRESS",
+      "position": 0,
+      "createdAt": "2026-07-06T08:00:00.000Z"
+    }
+  ],
+  "total": 3,
+  "limit": 3,
+  "isPremium": false
+}
+```
+
+**Changes from v1**: Tasks now include `position` field and are ordered by `status ASC, position ASC`.
+
+**Response 401**: `{ "error": "Authentication required" }`
+
+---
+
+## POST /tasks
+
+Create a new task. Defaults to "TODO" status, assigned position = count of existing "TODO" tasks (appended to bottom).
+
+**Request**:
+```json
+{
+  "title": "Set up project",
+  "description": "Initialize repo and install dependencies"
+}
+```
+
+**Response 201**:
+```json
+{
+  "id": "uuid",
+  "title": "Set up project",
+  "description": "Initialize repo and install dependencies",
+  "status": "TODO",
+  "position": 2,
+  "createdAt": "2026-07-06T10:00:00.000Z"
+}
+```
+
+**Changes from v1**: Response now includes `position` field.
+
+**Response 403** (free user at task limit):
+```json
+{
+  "error": "Free users can only create 3 tasks. Upgrade to premium for unlimited tasks!"
+}
+```
+
+**Response 400** (validation error):
+```json
+{
+  "error": "Validation failed",
+  "details": [
+    { "field": "title", "message": "Title is required" }
+  ]
+}
+```
+
+---
+
+## DELETE /tasks/:id
+
+Delete a task owned by the authenticated user. Renumbers positions of remaining tasks in the same column to close the gap.
+
+**Response 200**:
+```json
+{
+  "deleted": true
+}
+```
+
+**Response 404**: `{ "error": "Task not found" }`
+
+**Response 403** (task belongs to another user): `{ "error": "Forbidden" }`
+
+---
+
+## PATCH /tasks/:id/status
+
+Update the status **and optionally position** of a task. Used by both the status dropdown (status only) and drag-and-drop (status + position).
+
+**Request** (status dropdown — no position, task appended to bottom of target):
+```json
+{
+  "status": "IN_PROGRESS"
+}
+```
+
+**Request** (drag-and-drop — with position):
+```json
+{
+  "status": "IN_PROGRESS",
+  "position": 1
+}
+```
+
+**Validation**:
+- `status`: required, must be one of "TODO", "IN_PROGRESS", "DONE"
+- `position`: optional, non-negative integer. If provided, task is inserted at that position and siblings are renumbered
+
+**Response 200**:
+```json
+{
+  "id": "uuid",
+  "title": "Set up project",
+  "description": "Initialize repo and install deps",
+  "status": "IN_PROGRESS",
+  "position": 1,
+  "createdAt": "2026-07-06T10:00:00.000Z"
+}
+```
+
+**Response 404**: `{ "error": "Task not found" }`
+
+**Response 403**: `{ "error": "Forbidden" }`
+
+**Response 400**: `{ "error": "Validation failed", "details": [...] }`

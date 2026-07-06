@@ -5,18 +5,30 @@ import { useLogin } from '../../features/auth/auth.api';
 import { useAuth } from '../../lib/auth-context';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { LoginInputSchema } from '../../schemas/auth.schema';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
   const loginMutation = useLogin();
   const { login: authLogin } = useAuth();
   const router = useRouter();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
+
+    // Client-side validation with Zod
+    const parsed = LoginInputSchema.safeParse({ email, password });
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      setValidationError(firstIssue.message);
+      return;
+    }
+
     loginMutation.mutate(
-      { email, password },
+      parsed.data,
       {
         onSuccess: (data) => {
           authLogin(data.user, data.token);
@@ -26,7 +38,7 @@ export default function LoginPage() {
     );
   };
 
-  const errorMessage = loginMutation.error?.message;
+  const errorMessage = loginMutation.error?.message ?? validationError;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -34,8 +46,10 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold text-center mb-6">Log In to QuickTask</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
+              id="login-email"
+              name="email"
               type="email"
               autoComplete="email"
               value={email}
@@ -45,8 +59,10 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input
+              id="login-password"
+              name="password"
               type="password"
               autoComplete="current-password"
               value={password}
@@ -55,9 +71,7 @@ export default function LoginPage() {
               required
             />
           </div>
-          {errorMessage && (
-            <p className="text-red-600 text-sm">{errorMessage}</p>
-          )}
+          {errorMessage && <p className="text-red-600 text-sm">{errorMessage}</p>}
           <button
             type="submit"
             disabled={loginMutation.isPending}
@@ -68,9 +82,7 @@ export default function LoginPage() {
         </form>
         <p className="text-center mt-4 text-sm text-gray-600">
           Don&apos;t have an account?{' '}
-          <Link href="/register" className="text-blue-600 hover:underline">
-            Register
-          </Link>
+          <Link href="/register" className="text-blue-600 hover:underline">Register</Link>
         </p>
       </div>
     </div>

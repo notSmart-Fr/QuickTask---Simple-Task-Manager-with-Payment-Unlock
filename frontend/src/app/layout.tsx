@@ -5,6 +5,9 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'QuickTask',
   description: 'Simple task management with payment unlock',
+  icons: {
+    icon: '/icon.svg',
+  },
 };
 
 export default function RootLayout({
