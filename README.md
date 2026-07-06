@@ -171,6 +171,4 @@ Live Render's free tier spins down after 15 min idle — first request after idl
 
 - **CORS trailing slash**: Render env vars sometimes include trailing slashes, which breaks CORS origin matching. `main.ts` strips trailing slashes from `FRONTEND_URL` with `.replace(/\/+$/, "")`.
 
-- **`autoComplete="off"` on name field**: Chrome was autofilling saved email into the name input. Changing `autoComplete="name"` to `autoComplete="off"` fixed it.
-
 - **DragOverlay duplicate IDs**: `@dnd-kit` DragOverlay renders a second copy of the task card, which caused duplicate form element IDs. Fixed by passing `variant="overlay"` to hide interactive elements in the overlay and using React `useId()` instead of `task.id`.
