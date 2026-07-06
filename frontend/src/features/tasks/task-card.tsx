@@ -63,7 +63,6 @@ export function TaskCard({ task, variant = 'default' }: TaskCardProps) {
                 id={`task-status-${uid}`}
                 name="status"
                 value={task.status}
-                onPointerDown={(e) => { e.stopPropagation(); }}
                 onChange={(e) => { void handleStatusChange(e.target.value as TaskStatus); }}
                 className="text-sm border rounded px-2 py-1"
                 disabled={updateStatus.isPending}
@@ -75,7 +74,6 @@ export function TaskCard({ task, variant = 'default' }: TaskCardProps) {
             </div>
             <button
               type="button"
-              onPointerDown={(e) => { e.stopPropagation(); }}
               onClick={() => { void handleDelete(); }}
               disabled={isDeleting || deleteTask.isPending}
               className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"

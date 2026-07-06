@@ -39,12 +39,12 @@ export default function DashboardPage() {
   // Refresh auth state on mount — catches Stripe webhook premium updates
   useEffect(() => {
     if (!user) return;
-    Effect.runPromise(Effect.either(fetchMeEffect())).then((either) => {
+    void Effect.runPromise(Effect.either(fetchMeEffect())).then((either) => {
       if (Either.isRight(either) && either.right.isPremium !== user.isPremium) {
         refreshUser(either.right);
       }
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   if (isLoading) {
     return (

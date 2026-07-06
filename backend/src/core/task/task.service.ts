@@ -105,86 +105,39 @@ export class TaskService {
         catch: (e) => (e instanceof Error ? e : new Error(String(e))),
       });
 
-      if (!task) {
-        return yield* Effect.fail(new TaskNotFound({ taskId }));
-      }
+      if (!task) return yield* Effect.fail(new TaskNotFound({ taskId }));
 
       // If no change, return early
-      if (task.status === newStatus && newPosition === task.position) {
-        return task;
-      }
+      if (task.status === newStatus && newPosition === task.position) return task;
 
-      // Execute everything in a transaction
       const result = yield* Effect.tryPromise({
         try: () =>
           this.taskRepository.transaction(async (tx) => {
-            // Get target column tasks
             const targetColumn = await tx.listByOwnerIdAndStatus(user.id, newStatus);
-            let targetPos = newPosition;
-            if (targetPos === undefined) {
-              targetPos = targetColumn.length;
-            }
-            // Clamp targetPos
-            targetPos = Math.max(0, Math.min(targetPos, targetColumn.length));
+            const targetPos = newPosition === undefined
+              ? targetColumn.length
+              : Math.max(0, Math.min(newPosition, targetColumn.length));
 
-            // Handle shifts
             if (task.status === newStatus) {
-              // Same column: shift between old and new position
+              // Same column: shift only the affected slice between old and new position
               const oldPos = task.position;
               if (targetPos < oldPos) {
-                // Shift tasks from targetPos to oldPos-1 to the right by 1
-                await tx.shiftPositions(
-                  user.id,
-                  newStatus,
-                  targetPos,
-                  oldPos - 1,
-                  1,
-                );
+                await tx.shiftPositions(user.id, newStatus, targetPos, oldPos - 1, 1);
               } else if (targetPos > oldPos) {
-                // Shift tasks from oldPos+1 to targetPos to the left by 1
-                await tx.shiftPositions(
-                  user.id,
-                  newStatus,
-                  oldPos + 1,
-                  targetPos,
-                  -1,
-                );
+                await tx.shiftPositions(user.id, newStatus, oldPos + 1, targetPos, -1);
               }
             } else {
-              // Different columns
-              // Shift target column from targetPos right by 1
-              await tx.shiftPositions(
-                user.id,
-                newStatus,
-                targetPos,
-                undefined,
-                1,
-              );
-              // Shift source column from oldPos+1 left by 1
-              await tx.shiftPositions(
-                user.id,
-                task.status,
-                task.position + 1,
-                undefined,
-                -1,
-              );
+              // Cross-column: shift target column up, source column down
+              await tx.shiftPositions(user.id, newStatus, targetPos, undefined, 1);
+              await tx.shiftPositions(user.id, task.status, task.position + 1, undefined, -1);
             }
 
-            // Update the task with new status and position
-            const updatedTask = await tx.updateStatusByIdAndOwnerId(
-              taskId,
-              user.id,
-              newStatus,
-              targetPos,
-            );
-            return updatedTask;
+            return tx.updateStatusByIdAndOwnerId(taskId, user.id, newStatus, targetPos);
           }),
         catch: (e) => (e instanceof Error ? e : new Error(String(e))),
       });
 
-      if (!result) {
-        return yield* Effect.fail(new TaskNotFound({ taskId }));
-      }
+      if (!result) return yield* Effect.fail(new TaskNotFound({ taskId }));
       return result;
     });
   }
