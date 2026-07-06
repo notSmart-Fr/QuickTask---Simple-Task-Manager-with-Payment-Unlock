@@ -7,6 +7,8 @@ import { AddTaskForm } from '../../features/tasks/add-task-form';
 import { KanbanBoard } from '../../features/tasks/kanban-board';
 import { useTasks } from '../../features/tasks/tasks.api';
 import { UnlockButton } from '../../features/payment/unlock-button';
+import { fetchMeEffect } from '../../core/api/auth.effect';
+import { Effect, Either } from 'effect';
 
 function FreeTierBanner({ taskCount }: { taskCount: number }) {
   return (
@@ -23,7 +25,7 @@ function FreeTierBanner({ taskCount }: { taskCount: number }) {
 }
 
 export default function DashboardPage() {
-  const { user, logout, isLoading } = useAuth();
+  const { user, logout, isLoading, refreshUser } = useAuth();
   const router = useRouter();
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const tasksQuery = useTasks();
@@ -33,6 +35,16 @@ export default function DashboardPage() {
       router.replace('/login');
     }
   }, [user, isLoading, router]);
+
+  // Refresh auth state on mount — catches Stripe webhook premium updates
+  useEffect(() => {
+    if (!user) return;
+    Effect.runPromise(Effect.either(fetchMeEffect())).then((either) => {
+      if (Either.isRight(either) && either.right.isPremium !== user.isPremium) {
+        refreshUser(either.right);
+      }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return (
