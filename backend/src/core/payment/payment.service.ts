@@ -67,54 +67,45 @@ export class PaymentService {
       });
 
       const eventId = this.stripeGateway.getEventId(event);
-
-      // Idempotency check
-      const existingPayment = yield* Effect.tryPromise({
-        try: () => this.paymentRepo.findByEventId(eventId),
-        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
-      });
-
-      if (existingPayment) {
-        console.error(`Event ${eventId} already processed`);
-        return;
-      }
-
       const sessionId = this.stripeGateway.getSessionId(event);
       if (!sessionId) {
         console.error("No session ID in event");
         return;
       }
 
-      const payment = yield* Effect.tryPromise({
-        try: () => this.paymentRepo.findBySessionId(sessionId),
-        catch: (e) => (e instanceof Error ? e : new Error(String(e))),
-      });
+      // Atomic: idempotency check + processing in one Prisma transaction.
+      // Two concurrent Stripe webhooks for the same event serialize here —
+      // the second one sees the already-processed record and does nothing.
+      yield* Effect.tryPromise({
+        try: () =>
+          this.paymentRepo.transaction(async (tx) => {
+            const alreadyProcessed = await tx.findByEventId(eventId);
+            if (alreadyProcessed) {
+              console.error(`Event ${eventId} already processed`);
+              return;
+            }
 
-      if (!payment) {
-        return yield* Effect.fail(
-          new PaymentRecordNotFound({ sessionId }),
-        );
-      }
+            const payment = await tx.findBySessionId(sessionId);
+            if (!payment) {
+              throw new Error(`Payment not found for session ${sessionId}`);
+            }
 
-      if (event.type === "checkout.session.completed") {
-        // Atomic upgrade via Prisma transaction
-        // ponytail: Prisma $transaction uses plain async, wrap in Effect.tryPromise
-        yield* Effect.tryPromise({
-          try: () =>
-            this.paymentRepo.transaction(async (txPaymentRepo) => {
-              await txPaymentRepo.updateStatus(payment.id, "COMPLETED", eventId);
+            if (event.type === "checkout.session.completed") {
+              await tx.updateStatus(payment.id, "COMPLETED", eventId);
               await this.userRepo.transaction(async (txUserRepo) => {
                 await txUserRepo.updateToPremium(payment.ownerId);
               });
-            }),
-          catch: (e) => (e instanceof Error ? e : new Error(String(e))),
-        });
-      } else {
-        yield* Effect.tryPromise({
-          try: () => this.paymentRepo.updateStatus(payment.id, "FAILED", eventId),
-          catch: (e) => (e instanceof Error ? e : new Error(String(e))),
-        });
-      }
+            } else {
+              await tx.updateStatus(payment.id, "FAILED", eventId);
+            }
+          }),
+        catch: (e) => {
+          if (e instanceof Error && e.message.startsWith("Payment not found for session")) {
+            return new PaymentRecordNotFound({ sessionId });
+          }
+          return e instanceof Error ? e : new Error(String(e));
+        },
+      });
     });
   }
 }

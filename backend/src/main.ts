@@ -48,8 +48,13 @@ app.use(express.json({
   },
 }));
 
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
+app.get("/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", db: "connected" });
+  } catch {
+    res.status(503).json({ status: "error", db: "disconnected" });
+  }
 });
 
 app.use("/api/v1/auth", authRoutes);
@@ -74,8 +79,28 @@ app.use(
 
 const PORT = config.PORT;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${String(PORT)}`);
 });
+
+// ── Graceful shutdown ──
+// ponytail: SIGTERM/SIGINT → stop accepting → drain in-flight → disconnect DB → exit
+const shutdown = (signal: string) => {
+  console.error(`Received ${signal}, shutting down gracefully...`);
+  server.close(() => {
+    void prisma.$disconnect().then(() => {
+      console.error("Server shut down cleanly");
+      process.exit(0);
+    });
+  });
+  // Force exit after 10s if graceful shutdown stalls
+  setTimeout(() => {
+    console.error("Forced shutdown after timeout");
+    process.exit(1);
+  }, 10_000).unref();
+};
+
+process.on("SIGTERM", () => { shutdown("SIGTERM"); });
+process.on("SIGINT", () => { shutdown("SIGINT"); });
 
 export default app;

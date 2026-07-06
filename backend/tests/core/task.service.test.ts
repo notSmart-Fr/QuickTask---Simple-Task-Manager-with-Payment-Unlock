@@ -10,6 +10,7 @@ const makeTask = (overrides: Partial<Task> = {}): Task => ({
   title: "My Task",
   description: "",
   status: "TODO",
+  position: 0,
   ownerId: "user-1",
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -22,15 +23,17 @@ const premiumUser = { id: "user-2", isPremium: true };
 function makeRepo(mocks: Partial<TaskRepositoryPort> = {}): TaskRepositoryPort {
   const repo = {
     listByOwnerId: vi.fn(),
+    listByOwnerIdAndStatus: vi.fn(),
     create: vi.fn(),
     deleteByIdAndOwnerId: vi.fn(),
     findByIdAndOwnerId: vi.fn(),
     updateStatusByIdAndOwnerId: vi.fn(),
+    shiftPositions: vi.fn(),
     countByOwnerId: vi.fn(),
     transaction: vi.fn().mockImplementation(async (fn) => fn(repo)),
   };
   Object.assign(repo, mocks);
-  return repo as TaskRepositoryPort;
+  return repo as unknown as TaskRepositoryPort;
 }
 
 describe("TaskService.createTask", () => {
@@ -68,8 +71,8 @@ describe("TaskService.createTask", () => {
 
     expect(Either.isLeft(either)).toBe(true);
     if (Either.isLeft(either)) {
-      expect(either.left._tag).toBe("TaskLimitReached");
-      expect(either.left.limit).toBe(FREE_TASK_LIMIT);
+      expect((either.left as { _tag: string })._tag).toBe("TaskLimitReached");
+      expect((either.left as { limit: number }).limit).toBe(FREE_TASK_LIMIT);
     }
   });
 
@@ -139,15 +142,21 @@ describe("TaskService.deleteTask", () => {
 
     expect(Either.isLeft(either)).toBe(true);
     if (Either.isLeft(either)) {
-      expect(either.left._tag).toBe("TaskNotFound");
+      expect((either.left as { _tag: string })._tag).toBe("TaskNotFound");
     }
   });
 });
 
 describe("TaskService.updateTaskStatus", () => {
   it("updates task status", async () => {
-    const updated = makeTask({ status: "IN_PROGRESS" });
-    const repo = makeRepo({ updateStatusByIdAndOwnerId: vi.fn().mockResolvedValue(updated) });
+    const existing = makeTask({ status: "TODO", position: 0 });
+    const updated = makeTask({ status: "IN_PROGRESS", position: 0 });
+    const repo = makeRepo({
+      findByIdAndOwnerId: vi.fn().mockResolvedValue(existing),
+      listByOwnerIdAndStatus: vi.fn().mockResolvedValue([] as Task[]),
+      shiftPositions: vi.fn().mockResolvedValue(undefined),
+      updateStatusByIdAndOwnerId: vi.fn().mockResolvedValue(updated),
+    });
     const service = new TaskService(repo);
 
     const either = await Effect.runPromise(
@@ -163,18 +172,20 @@ describe("TaskService.updateTaskStatus", () => {
   });
 
   it("fails with TaskNotFound when task does not exist", async () => {
-    const repo = makeRepo({ updateStatusByIdAndOwnerId: vi.fn().mockResolvedValue(null) });
+    const repo = makeRepo({
+      findByIdAndOwnerId: vi.fn().mockResolvedValue(null),
+    });
     const service = new TaskService(repo);
 
     const either = await Effect.runPromise(
       Effect.either(
-        service.updateTaskStatus(freeUser, "nonexistent", "DONE"),
+        service.updateTaskStatus(premiumUser, "nonexistent", "DONE"),
       ),
     );
 
     expect(Either.isLeft(either)).toBe(true);
     if (Either.isLeft(either)) {
-      expect(either.left._tag).toBe("TaskNotFound");
+      expect((either.left as { _tag: string })._tag).toBe("TaskNotFound");
     }
   });
 });
