@@ -9,13 +9,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts --fix"
+    "lint": "eslint \"src/**/*.ts\" --fix --no-error-on-unmatched-pattern",
+    "knip": "knip"
   },
   "dependencies": {
     "@effect/schema": "^0.74.2",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "express": "^4.21.1",
     "express-async-errors": "^3.1.1",
     "jsonwebtoken": "^9.0.2",
@@ -23,19 +25,22 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "^9.15.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.9.0",
     "eslint": "^9.15.0",
-    "eslint-config-prettier": "^9.1.0",
+    "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.2.1",
+    "knip": "^5.52.1",
     "prettier": "^3.3.3",
     "prisma": "^5.22.0",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
+    "typescript-eslint": "^8.16.0",
     "vitest": "^2.1.4"
   }
 }

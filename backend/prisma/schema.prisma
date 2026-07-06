@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  isPremium    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  tasks        Task[]
+  payments     Payment[]
+
+  @@index([email])
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  title       String
+  description String     @default("")
+  status      TaskStatus @default(TODO)
+  ownerId     String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, status])
+}
+
+model Payment {
+  id               String        @id @default(uuid())
+  userId           String
+  stripeSessionId  String        @unique
+  stripeEventId    String?       @unique
+  amount           Int           @default(500)
+  status           PaymentStatus @default(PENDING)
+  createdAt        DateTime      @default(now())
+  completedAt      DateTime?
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([stripeSessionId])
+  @@index([stripeEventId])
+  @@index([userId])
+}

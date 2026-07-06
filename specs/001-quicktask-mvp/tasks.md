@@ -40,13 +40,13 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T007 Create Prisma schema with User, Task, Payment models per data-model.md (enums for TaskStatus and PaymentStatus, unique indexes on email, stripeSessionId, stripeEventId) in `backend/prisma/schema.prisma`
+- [X] T007 Create Prisma schema with User, Task, Payment models per data-model.md (enums for TaskStatus and PaymentStatus, unique indexes on email, stripeSessionId, stripeEventId) in `backend/prisma/schema.prisma`
 - [ ] T008 Run initial Prisma migration and generate client: `pnpm prisma migrate dev --name init`
-- [ ] T009 [P] Create backend config module with env validation at startup (Zod schema for all env vars, crash on missing config) in `backend/src/config.ts`
-- [ ] T010 Create Express app shell with CORS, JSON parsing, structured JSON logging middleware in `backend/src/main.ts`
-- [ ] T011 [P] Create shared Zod validation schemas (name, email, password, task title, task description, task status enum) in `backend/src/shared/schemas.ts` — these will also be duplicated in `frontend/src/schemas/` for frontend-side validation parity
-- [ ] T012 [P] Create frontend API client (fetch wrapper with base URL, auth header injection, JSON parsing, typed error handling) in `frontend/src/lib/api-client.ts`
-- [ ] T013 Implement JWT auth middleware (verify token, attach userId to request, return 401 on invalid/expired) in `backend/src/api/middleware/auth.middleware.ts`
+- [X] T009 [P] Create backend config module with env validation at startup (Zod schema for all env vars, crash on missing config in `backend/src/config.ts`
+- [X] T010 Create Express app shell with CORS, JSON parsing, structured JSON logging middleware in `backend/src/main.ts`
+- [X] T011 [P] Create shared Zod validation schemas (name, email, password, task title, task description, task status enum) in `backend/src/shared/schemas.ts` — these will also be duplicated in `frontend/src/schemas/` for frontend-side validation parity
+- [X] T012 [P] Create frontend API client (fetch wrapper with base URL, auth header injection, JSON parsing, typed error handling in `frontend/src/lib/api-client.ts`
+- [X] T013 Implement JWT auth middleware (verify token, attach userId to request, return 401 on invalid/expired in `backend/src/api/middleware/auth.middleware.ts`
 
 **Checkpoint**: Foundation ready — user story implementation can now begin
 
@@ -62,20 +62,20 @@
 
 **Backend — Domain Layer**
 
-- [ ] T014 [P] [US1] Define auth port interfaces (UserRepositoryPort, PasswordHasherPort, TokenPort) in `backend/src/core/auth/auth.port.ts`
-- [ ] T015 [P] [US1] Define User entity types and validation (no framework imports) in `backend/src/core/auth/user.entity.ts`
-- [ ] T016 [US1] Implement AuthService (register with duplicate-email check, login with password verify, getUserFromToken) using EffectTS with typed errors in `backend/src/core/auth/auth.service.ts`
+- [X] T014 [P] [US1] Define auth port interfaces (UserRepositoryPort, PasswordHasherPort, TokenPort) in `backend/src/core/auth/auth.port.ts`
+- [X] T015 [P] [US1] Define User entity types and validation (no framework imports) in `backend/src/core/auth/user.entity.ts`
+- [X] T016 [US1] Implement AuthService (register with duplicate-email check, login with password verify, getUserFromToken) in `backend/src/core/auth/auth.service.ts`
 
 **Backend — Adapters**
 
-- [ ] T017 [P] [US1] Implement BcryptHasher adapter (hash password, compare password) in `backend/src/adapters/bcrypt/bcrypt-hasher.adapter.ts`
-- [ ] T018 [P] [US1] Implement JwtToken adapter (sign token with 7-day expiry carrying userId+isPremium, verify token) in `backend/src/adapters/jwt/jwt-token.adapter.ts`
-- [ ] T019 [P] [US1] Implement PrismaUserRepository (create user, findByEmail, findById, update to premium) in `backend/src/adapters/prisma/prisma-user.repository.ts`
+- [X] T017 [P] [US1] Implement BcryptHasher adapter (hash password, compare password) in `backend/src/adapters/bcrypt/bcrypt-hasher.adapter.ts`
+- [X] T018 [P] [US1] Implement JwtToken adapter (sign token with 7-day expiry carrying userId+isPremium, verify token) in `backend/src/adapters/jwt/jwt-token.adapter.ts`
+- [X] T019 [P] [US1] Implement PrismaUserRepository (create user, findByEmail, findById, update to premium) in `backend/src/adapters/prisma/prisma-user.repository.ts`
 
 **Backend — API Routes**
 
-- [ ] T020 [US1] Implement auth routes (POST /register, POST /login, GET /me) with Zod validation and EffectTS error-to-HTTP mapping in `backend/src/api/auth.routes.ts`
-- [ ] T021 [US1] Wire auth dependencies in composition root (instantiate adapters, inject into service, mount routes) in `backend/src/main.ts`
+- [X] T020 [US1] Implement auth routes (POST /register, POST /login, GET /me) with Zod validation and HTTP error mapping in `backend/src/api/auth.routes.ts`
+- [X] T021 [US1] Wire auth dependencies in composition root (instantiate adapters, inject into service, mount routes) in `backend/src/main.ts`
 
 **Backend — Tests (constitution §3.3: CRITICAL for auth)**
 
@@ -85,14 +85,14 @@
 
 **Frontend**
 
-- [ ] T025 [P] [US1] Create Zod auth schemas (register input, login input) for client-side validation in `frontend/src/schemas/auth.schema.ts`
-- [ ] T026 [P] [US1] Create auth API hooks (useRegister, useLogin, useMe) with TanStack Query useMutation/useQuery in `frontend/src/features/auth/auth.api.ts`
-- [ ] T027 [US1] Create AuthContext (user state, login/logout actions, token storage in cookie/localStorage, auth guard) in `frontend/src/lib/auth-context.tsx`
-- [ ] T028 [US1] Create login page with form (email + password), validation errors, redirect to dashboard on success in `frontend/src/app/login/page.tsx`
-- [ ] T029 [US1] Create register page with form (name + email + password), validation errors, redirect to dashboard on success in `frontend/src/app/register/page.tsx`
-- [ ] T030 [US1] Create landing page (public, with links to Login and Register) in `frontend/src/app/page.tsx`
-- [ ] T031 [US1] Create root layout with AuthProvider wrapper in `frontend/src/app/layout.tsx`
-- [ ] T032 [US1] Create dashboard page (authenticated only, shows user name + logout button, placeholder for tasks) in `frontend/src/app/dashboard/page.tsx`
+- [X] T025 [P] [US1] Create Zod auth schemas (register input, login input) for client-side validation in `frontend/src/schemas/auth.schema.ts`
+- [X] T026 [P] [US1] Create auth API hooks (useRegister, useLogin, useMe) with TanStack Query useMutation/useQuery in `frontend/src/features/auth/auth.api.ts`
+- [X] T027 [US1] Create AuthContext (user state, login/logout actions, token storage in localStorage) in `frontend/src/lib/auth-context.tsx`
+- [X] T028 [US1] Create login page with form (email + password), validation errors, redirect to dashboard on success in `frontend/src/app/login/page.tsx`
+- [X] T029 [US1] Create register page with form (name + email + password), validation errors, redirect to dashboard on success in `frontend/src/app/register/page.tsx`
+- [X] T030 [US1] Create landing page (public, with links to Login and Register) in `frontend/src/app/page.tsx`
+- [X] T031 [US1] Create root layout with AuthProvider wrapper in `frontend/src/app/layout.tsx`
+- [X] T032 [US1] Create dashboard page (authenticated only, shows user name + logout button, placeholder for tasks) in `frontend/src/app/dashboard/page.tsx`
 
 **Checkpoint**: User Story 1 should be fully functional — register, login, protected dashboard, logout
 

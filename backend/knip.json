@@ -1,0 +1,4 @@
+{
+  "ignore": ["**/__tests__/**", "**/*.test.ts"],
+  "ignoreDependencies": ["@types/*"]
+}
