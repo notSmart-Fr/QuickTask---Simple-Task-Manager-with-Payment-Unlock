@@ -31,21 +31,20 @@ const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  // ponytail: Initialize state synchronously from localStorage so AuthProvider has
+  // the user immediately on mount — no async useEffect race with router.push.
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const storedUser = localStorage.getItem(USER_KEY);
+    const storedToken = localStorage.getItem(TOKEN_KEY);
+    if (!storedUser || !storedToken) return null;
+    const result = UserSchema.safeParse(JSON.parse(storedUser));
+    return result.success ? result.data : null;
+  });
   const [isLoading, setIsLoading] = useState(true);
 
+  // Finish loading once the effect runs (marks hydration complete)
   useEffect(() => {
-    const storedUser =
-      typeof window !== 'undefined' ? localStorage.getItem(USER_KEY) : null;
-    const storedToken =
-      typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
-
-    if (storedUser && storedToken) {
-      const result = UserSchema.safeParse(JSON.parse(storedUser));
-      if (result.success) {
-        setUser(result.data);
-      }
-    }
     setIsLoading(false);
   }, []);
 

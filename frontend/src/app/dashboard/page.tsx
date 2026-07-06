@@ -29,10 +29,10 @@ export default function DashboardPage() {
   const tasksQuery = useTasks();
 
   useEffect(() => {
-    if (!user) {
+    if (!user && !isLoading) {
       router.replace('/login');
     }
-  }, [user, router]);
+  }, [user, isLoading, router]);
 
   if (isLoading) {
     return (
