@@ -1,7 +1,7 @@
 import { Effect } from "effect";
-import { HttpError, NetworkError } from "../errors";
+import { HttpError, NetworkError } from "../../lib/errors";
 import { effectApi } from "../../lib/effect-client";
-import type { Task, TaskStatus } from "../../schemas/task.schema";
+import type { Task, TaskStatus } from "./task.schema";
 
 export function fetchTasksEffect(): Effect.Effect<
   Task[],

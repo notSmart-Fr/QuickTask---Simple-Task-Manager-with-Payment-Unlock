@@ -45,25 +45,6 @@ export default tseslint.config(
       // ── Ban 6: Empty catch blocks (FM4) ──
       "no-empty": ["error", { allowEmptyCatch: false }],
 
-      // ── Ban 7: `process.exit()` (FM5) ──
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "CallExpression[callee.object.name='process'][callee.property.name='exit']",
-          message: "Ban 7: process.exit() is FORBIDDEN. Use graceful SIGTERM/SIGINT shutdown handlers per constitution §1.10.",
-        },
-        // ── Ban 1: Raw `JSON.parse()` without Zod (FM1) ──
-        {
-          selector: "CallExpression[callee.object.name='JSON'][callee.property.name='parse']",
-          message: "Ban 1: Raw JSON.parse() is FORBIDDEN. Use Zod.safeParse() for validated parsing at boundaries.",
-        },
-        // ── Ban 12: `export *` barrel exports (FM3) ──
-        {
-          selector: "ExportAllDeclaration",
-          message: "Ban 12: export * is FORBIDDEN. Export named members explicitly to avoid leaking internals (constitution §3.7).",
-        },
-      ],
-
       // ── Ban 11: Floating promises (FM5/FM4) ──
       "@typescript-eslint/no-floating-promises": "error",
 
@@ -144,8 +125,9 @@ export default tseslint.config(
 
   {
     // Ban 9: process.env outside config — banned everywhere except config.ts
+    // Excludes features/ — those have their own complete rule set below
     files: ["src/**/*.ts"],
-    ignores: ["src/config.ts", "src/main.ts"],
+    ignores: ["src/config.ts", "src/main.ts", "src/features/**/*.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -169,34 +151,40 @@ export default tseslint.config(
           selector: "ExportAllDeclaration",
           message: "Ban 12: export * is FORBIDDEN.",
         },
+        // DB ban: Prisma $queryRaw / $executeRaw
+        {
+          selector: "CallExpression[callee.property.name=/^\\$queryRaw|\\$executeRaw/]",
+          message: "Prisma raw query ban: $queryRaw / $executeRaw is FORBIDDEN. Use type-safe Prisma query methods instead.",
+        },
       ],
     },
   },
 
   {
-    // Ban 10 + 14: Non-deterministic primitives in core/ (FM7)
+    // Ban 10 + 14: Non-deterministic primitives in features/ (FM7)
     // Date.now(), new Date(), Math.random(), crypto.randomUUID()
-    files: ["src/core/**/*.ts"],
+    // Effect-TS: try/catch is FORBIDDEN — use Effect.gen + Effect.tryPromise
+    files: ["src/features/**/*.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",
         {
           selector: "CallExpression[callee.object.name='Date'][callee.property.name='now']",
-          message: "Ban 10: Date.now() is FORBIDDEN in core/. Inject a Clock abstraction for determinism per constitution §1.3.1.",
+          message: "Ban 10: Date.now() is FORBIDDEN in features/. Inject a Clock abstraction for determinism per constitution §1.3.1.",
         },
         {
           selector: "NewExpression[callee.name='Date']",
-          message: "Ban 10: new Date() is FORBIDDEN in core/. Inject a Clock abstraction for determinism per constitution §1.3.1.",
+          message: "Ban 10: new Date() is FORBIDDEN in features/. Inject a Clock abstraction for determinism per constitution §1.3.1.",
         },
         {
           selector: "CallExpression[callee.object.name='Math'][callee.property.name='random']",
-          message: "Ban 14: Math.random() is FORBIDDEN in core/. Inject an IdGenerator abstraction per constitution §1.3.1.",
+          message: "Ban 14: Math.random() is FORBIDDEN in features/. Inject an IdGenerator abstraction per constitution §1.3.1.",
         },
         {
           selector: "CallExpression[callee.object.name='crypto'][callee.property.name='randomUUID']",
-          message: "Ban 14: crypto.randomUUID() is FORBIDDEN in core/. Inject an IdGenerator abstraction per constitution §1.3.1.",
+          message: "Ban 14: crypto.randomUUID() is FORBIDDEN in features/. Inject an IdGenerator abstraction per constitution §1.3.1.",
         },
-        // Also enforce the other bans in core/
+        // Also enforce the other bans in features/
         // Ban 1: JSON.parse
         {
           selector: "CallExpression[callee.object.name='JSON'][callee.property.name='parse']",
@@ -205,72 +193,29 @@ export default tseslint.config(
         // Ban 7: process.exit
         {
           selector: "CallExpression[callee.object.name='process'][callee.property.name='exit']",
-          message: "Ban 7: process.exit() is FORBIDDEN in core/.",
+          message: "Ban 7: process.exit() is FORBIDDEN in features/.",
         },
         // Ban 9: process.env
         {
           selector: "MemberExpression[object.object.name='process'][object.property.name='env']",
-          message: "Ban 9: process.env is FORBIDDEN in core/. Domain logic must not depend on environment variables.",
+          message: "Ban 9: process.env is FORBIDDEN in features/. Domain logic must not depend on environment variables.",
         },
         // Ban 12: export *
         {
           selector: "ExportAllDeclaration",
           message: "Ban 12: export * is FORBIDDEN.",
         },
-      ],
-    },
-  },
-
-  // ──────────────────────────────────────────────────
-  // FM2: Composition Root Enforcement — ban adapter `new` outside main.ts
-  // ──────────────────────────────────────────────────
-
-  {
-    files: ["src/**/*.ts"],
-    ignores: ["src/main.ts"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "NewExpression[callee.name=/^(PrismaUserRepository|PrismaTaskRepository|PrismaPaymentRepository|BcryptHasher|JwtToken|StripeGateway)$/]",
-          message: "FM2 Violation: Adapter must NOT be instantiated outside main.ts (composition root). Inject pre-built services via constructor/function parameter instead.",
-        },
-      ],
-    },
-  },
-
-  // ──────────────────────────────────────────────────
-  // Effect-TS: try/catch is FORBIDDEN in core/ and api/
-  // Domain errors go through the Effect error channel (Data.TaggedError)
-  // Routes use Effect.either + _tag matching — never try/catch
-  // ──────────────────────────────────────────────────
-
-  {
-    files: ["src/core/**/*.ts", "src/api/**/*.ts"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
+        // Effect-TS: try/catch is FORBIDDEN in features/
+        // Domain errors go through the Effect error channel (Data.TaggedError)
+        // Routes use Effect.either + _tag matching — never try/catch
         {
           selector: "TryStatement",
-          message: "try/catch is FORBIDDEN in core/ and api/. Use Effect.gen + Effect.tryPromise for async boundaries, and Effect.either + Either.isLeft for error matching in routes. See AGENTS.md §Effect-TS Rules.",
+          message: "try/catch is FORBIDDEN in features/. Use Effect.gen + Effect.tryPromise for async boundaries, and Effect.either + Either.isLeft for error matching in routes. See AGENTS.md §Effect-TS Rules.",
         },
-      ],
-    },
-  },
-
-  // ──────────────────────────────────────────────────
-  // DB-Layer Bans (Prisma) — per archguard-methodology §Database-Layer Bans
-  // ──────────────────────────────────────────────────
-
-  {
-    // Ban: Prisma $queryRaw / $executeRaw (FM1)
-    files: ["src/**/*.ts"],
-    rules: {
-      "no-restricted-syntax": [
-        "error",
+        // DB ban: Prisma $queryRaw / $executeRaw
         {
           selector: "CallExpression[callee.property.name=/^\\$queryRaw|\\$executeRaw/]",
-          message: "Prisma raw query ban: $queryRaw / $executeRaw is FORBIDDEN. Use type-safe Prisma query methods instead. Raw SQL bypasses type safety and allows SQL injection (FM1).",
+          message: "Prisma raw query ban: $queryRaw / $executeRaw is FORBIDDEN. Use type-safe Prisma query methods instead.",
         },
       ],
     },
@@ -283,20 +228,9 @@ export default tseslint.config(
       "@typescript-eslint/no-namespace": ["error", { "allowDeclarations": true }],
     },
   },
-  {
-    // Relax no-unsafe rules for Prisma adapters until we run prisma generate
-    files: ["src/adapters/prisma/**/*.ts"],
-    rules: {
-      "@typescript-eslint/no-unsafe-argument": "off",
-      "@typescript-eslint/no-unsafe-return": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-    },
-  },
 
   {
     // Ignore config files and generated files
     ignores: ["dist/", "node_modules/", "prisma/migrations/"],
-  }
+  },
 );

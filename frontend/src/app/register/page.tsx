@@ -5,7 +5,7 @@ import { useRegister } from '../../features/auth/auth.api';
 import { useAuth } from '../../lib/auth-context';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { RegisterInputSchema } from '../../schemas/auth.schema';
+import { RegisterInputSchema } from '../../features/auth/auth.schema';
 import { PasswordInput } from '../../features/auth/password-input';
 
 export default function RegisterPage() {

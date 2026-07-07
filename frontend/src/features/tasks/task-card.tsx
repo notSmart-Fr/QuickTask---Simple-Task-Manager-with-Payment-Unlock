@@ -1,6 +1,6 @@
 'use client';
 
-import type { Task, TaskStatus } from '../../schemas/task.schema';
+import type { Task, TaskStatus } from './task.schema';
 import { useDeleteTask, useUpdateTaskStatus } from './tasks.api';
 import { useState, useId } from 'react';
 

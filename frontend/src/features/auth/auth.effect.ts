@@ -1,7 +1,7 @@
 import { Effect } from "effect";
-import { HttpError, NetworkError } from "../errors";
+import { HttpError, NetworkError } from "../../lib/errors";
 import { effectApi } from "../../lib/effect-client";
-import type { User, AuthResponse } from "../../features/auth/auth.api";
+import type { AuthResponse } from "./auth.api";
 
 export function registerEffect(
   name: string,
@@ -18,6 +18,8 @@ export function loginEffect(
   return effectApi.post<AuthResponse>("/auth/login", { email, password });
 }
 
-export function fetchMeEffect(): Effect.Effect<User, HttpError | NetworkError> {
-  return effectApi.get<User>("/auth/me");
+// ponytail: /auth/me now returns { user, token } with a fresh DB-backed token,
+// so isPremium is never stale from the JWT.
+export function fetchMeEffect(): Effect.Effect<AuthResponse, HttpError | NetworkError> {
+  return effectApi.get<AuthResponse>("/auth/me");
 }

@@ -4,15 +4,14 @@
 
 **Request shape**: No body. `GET /api/v1/tasks`
 
-**Entry**: [task.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/task.routes.ts#L40-51)
+**Entry**: [tasks.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/tasks/tasks.routes.ts)
 
-**Middleware**: [auth.middleware.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/middleware/auth.middleware.ts) — JWT verify, sets `req.user`
+**Middleware**: [auth.middleware.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/middleware/auth.middleware.ts) — JWT verify, sets `req.user`
 
 **Service**: `TaskService.listTasks(user)`
-- `repo.listByOwnerId(user.id)` → sorted by `[{ status: "asc" }, { position: "asc" }]`
-- Maps to `{ tasks, total, limit: FREE_TASK_LIMIT, isPremium }`
-
-**Repository**: `PrismaTaskRepository.listByOwnerId` → `prisma.task.findMany({ where: { ownerId }, orderBy: [...] })`
+- `prisma.task.findMany({ where: { ownerId }, orderBy: [{ status: "asc" }, { position: "asc" }] })` — direct Prisma call, no repository layer
+- Maps to `Task[]`
+- Response includes `isPremium` flag from `req.user`
 
 **Response shape**: `200`
 ```typescript
@@ -25,20 +24,23 @@
 
 **Request shape** (Zod):
 ```typescript
-{ title: string; description?: string }
+{ title: string; description: string }
 ```
 
 **Entry**: `POST /api/v1/tasks`
-[task.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/task.routes.ts#L53-79)
+[tasks.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/tasks/tasks.routes.ts)
 
 **Service**: `TaskService.createTask(user, { title, description })`
-1. `repo.countByOwnerId(user.id)` — if ≥ 3 and !user.isPremium → `Effect.fail(TaskLimitReached)`
-2. `repo.create({ title, description, ownerId: user.id })`
-3. New task always created as TODO with position = current count of TODO tasks
 
-**Repository**: `PrismaTaskRepository.create`
-- Counts existing TODO tasks for the user
-- `prisma.task.create({ data: { title, description, ownerId, position: count } })`
+**Premium path** (no transaction needed):
+1. Query last task in TODO column for position: `prisma.task.findFirst({ where: { ownerId, status: "TODO" }, orderBy: { position: "desc" } })`
+2. `prisma.task.create({ position: (lastPos ?? 0) + 100 })` — fractional indexing
+
+**Free path** (uses `$transaction` for atomicity):
+1. `$transaction` wraps count check + create
+2. `tx.task.count({ where: { ownerId } })` — if ≥ 3 → `throw TaskLimitReached`
+3. Query last task position as above, create with `position = (lastPos ?? 0) + 100`
+4. `instanceof TaskLimitReached` check in Effect.catch re-throws as `Effect.fail`
 
 **Response shape**: `201 Task`
 
@@ -51,26 +53,27 @@
 
 ---
 
-## Update Task Status (Drag-and-Drop)
+## Update Task Status (Drag-and-Drop with Fractional Indexing)
 
 **Request shape**:
 ```typescript
-{ status: "TODO" | "IN_PROGRESS" | "DONE"; position?: number }
+{ status: "TODO" | "IN_PROGRESS" | "DONE"; position: number }
 ```
+`position` is a **fractional float** computed by the frontend from neighboring cards
+(e.g., `150.0`, `250.5`). It is NOT a sequential integer index.
 
 **Entry**: `PATCH /api/v1/tasks/:id/status`
-[task.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/task.routes.ts#L99-120)
+[tasks.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/tasks/tasks.routes.ts)
 
-**Service**: `TaskService.moveTask(user, taskId, newStatus, newPosition)`
-Inside a Prisma transaction:
-1. Find task by id + ownerId → if not found, `TaskNotFound`
-2. If same status and same position → no-op
-3. Compute target position (default: end of target column)
-4. **Same column reorder**: shift tasks between old and new position by ±1
-5. **Cross-column move**: shift target column up by 1, shift source column down by 1
-6. Update task status + position
+**Service**: `TaskService.updateTaskStatus(user, taskId, status, position)`
 
-**Repository**: Uses `PrismaTaskRepository.shiftPositions` + `updateStatusByIdAndOwnerId` inside a single `$transaction`
+**Single-row UPDATE** — no transaction, no `findMany`, no shifting:
+1. `prisma.task.update({ where: { id, ownerId }, data: { status, position } })`
+2. Prisma throws on not-found → caught by `Effect.either` → `Effect.fail(TaskNotFound)`
+
+**Fractional indexing**: The frontend computes the midpoint of the two neighboring
+cards' positions using `arrayMove` to determine the new sort order. The backend
+blindly writes the float — no other rows are touched.
 
 **Response shape**: `200 Task` (updated)
 
@@ -79,7 +82,7 @@ Inside a Prisma transaction:
 |-------|------|------|------|
 | Shape invalid | — | 400 | Zod safeParse fails |
 | Task not found | `TaskNotFound` | 404 | Task doesn't exist or doesn't belong to user |
-| Transaction failure | `Error` | 500 | DB deadlock, constraint violation, etc. |
+| DB failure | `Error` | 500 | Infrastructure failure |
 
 ---
 
@@ -87,14 +90,12 @@ Inside a Prisma transaction:
 
 **Request shape**: No body. `DELETE /api/v1/tasks/:id`
 
-**Entry**: [task.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/task.routes.ts#L81-97)
+**Entry**: [tasks.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/tasks/tasks.routes.ts)
 
 **Service**: `TaskService.deleteTask(user, taskId)`
-1. `repo.findByIdAndOwnerId(taskId, user.id)` → if not found, `TaskNotFound`
-2. `repo.deleteByIdAndOwnerId(taskId, user.id)`
-3. Deletion also shifts remaining tasks in the same column down by 1 position
-
-**Repository**: Two-step in repository: `prisma.task.delete` + `prisma.task.updateMany` (position decrement)
+1. `prisma.task.delete({ where: { id, ownerId } })` — direct Prisma call
+2. Prisma throws on not-found → `Effect.either` wraps → `Either.isLeft` → `TaskNotFound`
+3. **No `updateMany`** — fractional indexing means no position shifting needed on delete
 
 **Response shape**: `200 Task` (deleted)
 

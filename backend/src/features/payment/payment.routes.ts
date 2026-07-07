@@ -1,8 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { Effect, Either } from "effect";
-import type { PaymentService } from "../core/payment/payment.service.js";
-import { authMiddleware } from "./middleware/auth.middleware.js";
+import { PaymentService } from "./payment.service.js";
+import authMiddleware from "../../middleware/auth.middleware.js";
 
 const CreateCheckoutSchema = z.object({
   successUrl: z.string().url(),
@@ -62,7 +62,6 @@ export function createPaymentRouter(paymentService: PaymentService) {
           .json({ error: "Missing stripe-signature header" });
       }
 
-      // Use the raw body captured by express.json() verify callback
       const rawBody = (req as { rawBody?: Buffer }).rawBody as Buffer;
 
       const either = await Effect.runPromise(

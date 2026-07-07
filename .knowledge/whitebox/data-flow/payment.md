@@ -8,18 +8,20 @@
 ```
 
 **Entry**: `POST /api/v1/payment/create-checkout`
-[payment.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/payment.routes.ts#L20-52)
+[payment.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/payment/payment.routes.ts)
 
-**Middleware**: [auth.middleware.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/middleware/auth.middleware.ts) — JWT verify, sets `req.user`
+**Middleware**: [auth.middleware.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/middleware/auth.middleware.ts) — JWT verify, sets `req.user`
 
-**Service**: [PaymentService.createCheckout()](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/core/payment/payment.service.ts#L24-52)
+**Service**: `PaymentService.createCheckout(user, { successUrl, cancelUrl })`
 1. `stripeGateway.createCheckoutSession(userId, successUrl, cancelUrl)` → Stripe Checkout
    - Creates Stripe session with `mode: "payment"`, `unit_amount: 500` ($5), `product_name: "QuickTask Unlimited Tasks"`
    - Returns `{ sessionId, checkoutUrl }`
-2. `paymentRepo.create({ ownerId, stripeSessionId, status: "PENDING" })` → stores record
+2. `prisma.payment.create({ data: { ownerId, stripeSessionId, status: "PENDING" } })`
 
-**Gateway**: [StripeGateway](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/adapters/stripe/stripe-gateway.adapter.ts#L14-46)
+**Gateway**: [driver.stripe.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/payment/driver.stripe.ts) implements `PaymentGateway` interface
 - `stripe.checkout.sessions.create(...)` → SDK call to Stripe API
+- Registered at top of [payment.service.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/payment/payment.service.ts) via `PaymentGateway` interface
+- Instantiated in `main.ts` (composition root)
 
 **Response shape**: `201 { checkoutUrl: string }`
 
@@ -38,7 +40,7 @@
 **Request shape**: Raw Buffer body + `stripe-signature` header
 
 **Entry**: `POST /api/v1/payment/webhook`
-[payment.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/payment.routes.ts#L54-87)
+[payment.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/payment/payment.routes.ts)
 
 **No auth middleware** — Stripe sends raw requests with signature header.
 
@@ -51,15 +53,15 @@ express.json({
 })
 ```
 
-**Service**: [PaymentService.handleWebhook()](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/core/payment/payment.service.ts#L54-L108)
+**Service**: `PaymentService.handleWebhook(body, signature)`
 1. `stripeGateway.verifyWebhookSignature(body, signature)` → verifies signature using `STRIPE_WEBHOOK_SECRET`
 2. Stripe session ID extracted from event — if none, returns early
 3. **Atomic Prisma transaction** wraps everything below, ensuring concurrent webhooks serialize:
-   - `paymentRepo.findByEventId(eventId)` → **idempotency check** (inside transaction): if already processed, return early
-   - `paymentRepo.findBySessionId(sessionId)` → if not found, `PaymentRecordNotFound`
+   - `tx.payment.findByEventId(eventId)` → **idempotency check**: if already processed, return early
+   - `tx.payment.findBySessionId(sessionId)` → if not found, `PaymentRecordNotFound`
    - On `checkout.session.completed`:
-     - `updateStatus("COMPLETED", eventId)` + `userRepo.transaction(updateToPremium)`
-   - Other events: `updateStatus("FAILED", eventId)`
+     - `tx.payment.updateStatus("COMPLETED", eventId)` + `tx.user.updateToPremium(userId)`
+   - Other events: `tx.payment.updateStatus("FAILED", eventId)`
 
 **Gateway**: `stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET)`
 
@@ -78,6 +80,6 @@ express.json({
 ## GET Payment Status
 
 **Entry**: `GET /api/v1/payment/status`
-[payment.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/payment.routes.ts#L89-94)
+[payment.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/payment/payment.routes.ts)
 
 **Response shape**: `200 { isPremium: boolean }`

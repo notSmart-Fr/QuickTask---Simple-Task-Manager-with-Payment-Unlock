@@ -1,8 +1,8 @@
 import { Effect, Either } from "effect";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { registerEffect, loginEffect, fetchMeEffect } from "../../core/api/auth.effect";
-import type { HttpError, NetworkError } from "../../core/errors";
+import { registerEffect, loginEffect, fetchMeEffect } from "./auth.effect";
+import type { HttpError, NetworkError } from "../../lib/errors";
 
 export interface User {
   id: string;
@@ -51,7 +51,7 @@ export function useLogin(): UseMutationResult<
   });
 }
 
-export function useMe(): UseQueryResult<User, AuthError> {
+export function useMe(): UseQueryResult<AuthResponse, AuthError> {
   return useQuery({
     queryKey: ["me"],
     queryFn: () => runEffect(fetchMeEffect()),

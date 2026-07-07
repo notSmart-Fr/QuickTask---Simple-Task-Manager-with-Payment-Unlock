@@ -5,25 +5,25 @@
 | Pillar | Check | Result |
 |--------|-------|--------|
 | P1 — Perimeter | Every route uses Zod `safeParse` at boundary | ✅ PASS |
-| P2 — Core Purity | `task.service.ts` imports only Effect, entities, port interfaces | ✅ PASS |
-| P3 — Polarity | `core/` owns contracts (ports); `adapters/` implements them; `main.ts` is sole composition root | ✅ PASS |
-| P4 — Resilience | Transaction wrappers exist in all three Prisma repos; SIGTERM/SIGINT handler with `prisma.$disconnect()` | ✅ PASS |
+| P2 — Core Purity | All domain logic in `features/` uses Effect, no try/catch | ✅ PASS |
+| P3 — Polarity | Each feature owns its contracts (interfaces, drivers); `main.ts` is sole composition root | ✅ PASS |
+| P4 — Resilience | Atomic $transaction in payment webhook + createTask; SIGTERM/SIGINT handler with `prisma.$disconnect()` | ✅ PASS |
 | P5 — Security | Zero hardcoded secrets in source | ✅ PASS |
-| P6 — State Evolution | Prisma migrations exist (2 up); **no down/rollback migrations** | ❌ FAIL |
-| P7 — Observability | `/health` endpoint exists with DB connectivity probe (`SELECT 1`); **no structured logging, PII masking, or distributed tracing** | ✅ PASS |
+| P6 — State Evolution | Prisma migrations exist; **no down/rollback migrations** | ❌ FAIL |
+| P7 — Observability | `/health` endpoint with DB connectivity probe (`SELECT 1`); **no structured logging, PII masking, or distributed tracing** | ✅ PASS |
 
 ## What It Is
 
-A simple task manager with payment unlock. Free users get 3 tasks; $5 one-time Stripe payment unlocks unlimited tasks. Feature-driven hexagonal (ports & adapters) architecture with Effect-TS throughout the full stack.
+A simple task manager with payment unlock. Free users get 3 tasks; $5 one-time Stripe payment unlocks unlimited tasks. Vertical Slice Architecture with Effect-TS throughout the full stack.
 
 ## Stack
 
-- **Backend**: Express 5, TypeScript strict, Effect-TS 3.x, Zod, Prisma 5 + PostgreSQL (Neon)
-- **Frontend**: Next.js 16 (App Router), React 18, Tailwind CSS, TanStack Query, @dnd-kit
+- **Backend**: Express 5, TypeScript strict, Effect-TS 3.x, Zod, Prisma + PostgreSQL (Neon)
+- **Frontend**: Next.js 15 (App Router), React 19, Tailwind CSS, TanStack Query, @dnd-kit
 - **Auth**: JWT (7-day expiry), bcryptjs, stateless
 - **Payments**: Stripe Checkout ($5 one-time), webhook idempotency
 - **Testing**: Vitest, supertest
-- **Package Manager**: pnpm 9.15.0
+- **Package Manager**: pnpm
 
 ## Layer Model
 
@@ -32,89 +32,87 @@ A simple task manager with payment unlock. Free users get 3 tasks; $5 one-time S
 │                      COMPOSITION ROOT                       │
 │  main.ts                                                    │
 │  ── new PrismaClient()                                      │
-│  ── new PrismaUserRepository(prisma)                        │
-│  ── new PrismaTaskRepository(prisma)                        │
-│  ── new PrismaPaymentRepository(prisma)                     │
-│  ── new BcryptHasher()                                      │
-│  ── new JwtToken()                                          │
+│  ── new AuthService(prisma)                                 │
+│  ── new TaskService(prisma)                                 │
 │  ── new StripeGateway()                                     │
-│  ── new AuthService(userRepo, hasher, token)               │
-│  ── new TaskService(taskRepo)                               │
-│  ── new PaymentService(paymentRepo, userRepo, stripe)       │
+│  ── new PaymentService(prisma, stripeGateway)               │
 │  ── createAuthRouter(authService)                           │
 │  ── createTaskRouter(taskService)                           │
 │  ── createPaymentRouter(paymentService)                     │
 └──────────┬──────────────────────────┬───────────────────────┘
            │                          │
            ▼                          ▼
-┌──────────────────────┐   ┌──────────────────────────────────┐
-│    API (Express)     │   │    ADAPTERS (Infrastructure)     │
-│                      │   │                                  │
-│  auth.routes.ts ─────┼──▶│  PrismaUserRepository            │
-│    Zod.safeParse →   │   │  PrismaTaskRepository            │
-│    Effect.either →   │   │  PrismaPaymentRepository         │
-│    _tag match        │   │  BcryptHasher                     │
-│                      │   │  JwtToken                         │
-│  task.routes.ts ─────┼──▶│  StripeGateway                    │
-│    authMiddleware →   │   │                                  │
-│    Zod.safeParse →   │   │  ┌─ PrismaClient ──► PostgreSQL  │
-│    Effect.either →   │   │  └─ Stripe SDK ────► Stripe API  │
-│    _tag match        │   │                                  │
-│                      │   │                                  │
-│  payment.routes.ts ──┼──▶│  All import from core/ port      │
-│    Zod.safeParse →   │   │  interfaces only                 │
-│    Effect.either →   │   │                                  │
-│    _tag match        │   │                                  │
-│                      │   │                                  │
-│  middleware/         │   │                                  │
-│    auth.middleware   │   │                                  │
-└──────────┬───────────┘   └──────────────────────────────────┘
-           │
-           ▼
 ┌──────────────────────────────────────────────────────────────┐
-│              CORE (Pure Domain — no frameworks)              │
+│              FEATURES (Vertical Slices — backend)            │
 │                                                              │
-│  auth/                    task/                  payment/    │
-│    auth.service.ts          task.service.ts        payment.service.ts
-│      register() → {user,token}  createTask() → Task    createCheckout() → url
-│      login()    → {user,token}  listTasks()  → {tasks,…} handleWebhook() → void
-│    user.entity.ts            deleteTask() → Task          │
-│    auth.port.ts              updateTaskStatus() → Task    │
-│      (interfaces only)       moveTask() → Task            │
-│                              │                            │
-│                              task.entity.ts               │
-│                                Task { position, … }       │
-│                                FREE_TASK_LIMIT = 3        │
-│                              task.port.ts                 │
-│                                TaskRepositoryPort         │
-│                                 (interface only)           │
-│                                                           │
-│  All errors: Data.TaggedError                              │
-│    EmailAlreadyRegistered, InvalidCredentials,             │
-│    TaskLimitReached, TaskNotFound,                         │
-│    WebhookVerificationFailed, PaymentRecordNotFound        │
-│                                                           │
-│  shared/schemas.ts — Zod schemas (cross-boundary)          │
+│  auth/                        task/                    payment/
+│    auth.service.ts               tasks.service.ts        payment.service.ts
+│      Hasher (interface)            createTask() → Task      PaymentGateway (interface)
+│      TokenService (interface)      listTasks()  → Task[]    createCheckout() → url
+│      BcryptHasher (impl)           deleteTask() → Task      handleWebhook() → void
+│      JwtToken (impl)               updateTaskStatus() → Task│
+│      AuthService.register()        FREE_TASK_LIMIT = 3      driver.stripe.ts
+│      AuthService.login()           Task // domain types       StripeGateway (implements PaymentGateway)
+│      AuthService.getUserWithFreshToken()                    │
+│    auth.routes.ts               tasks.routes.ts           payment.routes.ts
+│      Zod.safeParse →              Zod.safeParse →           Zod.safeParse →
+│      Effect.either →              Effect.either →           Effect.either →
+│      _tag match                   _tag match                _tag match
+│                                                              │
+│  EFFECT-TS (Zod at Boundary, Effect in Core)                 │
+│                                                              │
+│  All errors: Data.TaggedError                                │
+│    EmailAlreadyRegistered, InvalidCredentials,               │
+│    TaskLimitReached, TaskNotFound,                           │
+│    WebhookVerificationFailed, PaymentRecordNotFound          │
+│                                                              │
+│  PrismaClient is injected directly — no repository layer     │
 └──────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────┐
-│                    FRONTEND (Next.js 16)                     │
+│              CROSS-CUTTING (backend)                         │
 │                                                              │
-│  app/                      features/              core/      │
-│    login/page.tsx            auth/                  api/     │
-│    register/page.tsx           auth.api.ts           auth.effect.ts
-│    dashboard/page.tsx        tasks/                  task.effect.ts
-│                                add-task-form.tsx     payment.effect.ts
-│  providers.tsx                 kanban-board.tsx     errors.ts
-│    QueryClientProvider         sortable-task-card  (TaggedError)
-│    AuthProvider                task-card.tsx
-│                                tasks.api.ts       lib/
-│                              payment/               effect-client.ts
-│                                payment.api.ts       auth-context.tsx
+│  middleware/auth.middleware.ts                                │
+│    JWT verify → sets req.user                                │
+│  types/express.d.ts                                          │
+│    Express Request augmentation for req.user                 │
+│  config.ts                                                   │
+│    Zod-validated env vars, crashes on startup if missing     │
+└──────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────┐
+│                    FRONTEND (Next.js 15)                     │
+│                                                              │
+│  app/                      features/              lib/       │
+│    login/page.tsx            auth/                  effect-client.ts
+│    register/page.tsx           auth.api.ts           (fetch + Effect.tryPromise)
+│    dashboard/page.tsx          auth.effect.ts        errors.ts
+│                                auth.schema.ts        (HttpError, NetworkError
+│  providers.tsx                 password-input.tsx     — Data.TaggedError)
+│    QueryClientProvider         password-toggle-icon  auth-context.tsx
+│    AuthProvider              tasks/
+│                                tasks.api.ts           (TanStack Query hooks
+│                              with runEffect bridge)
+│                                tasks.effect.ts
+│                                task.schema.ts
+│                                kanban-board.tsx       (DndContext, DropSpacer,
+│                              arrayMove)
+│                                sortable-task-card
+│                                task-card.tsx
+│                                add-task-form.tsx
+│                              payment/
+│                                payment.api.ts
+│                                payment.effect.ts
 │                                unlock-button.tsx
 │                                                              │
-│  Pattern: UI → TanStack Query → core/api/*.effect.ts         │
+│  Pattern: UI → TanStack Query → features/*/*.effect.ts       │
 │           → effectApi (fetch wrapper) → backend HTTP          │
+│                                                              │
+│  Kanban drag-and-drop: @dnd-kit/core with layered             │
+│    pointerWithin → closestCorners collision detection        │
+│    DropSpacer for visible "drop here" zones                  │
+│    Frontend computes fractional positions from neighbors     │
+│    using arrayMove + neighbor position midpoint              │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -148,8 +146,21 @@ Either.isRight(either)
 ```
 
 The same Effect-TS pattern flows end-to-end from frontend to backend:
-- **Frontend**: `ui → TanStack Query → runEffect(program) → effectApi → fetch()`
-- **Backend**: `route → Zod → Effect.either(service) → repository → Prisma`
+- **Frontend**: `ui → TanStack Query → runEffect(program) → feature.effect.ts → effectApi → fetch()`
+- **Backend**: `route → Zod → Effect.either(service) → Prisma (direct, no repository)`
+
+## Task Position Model (Fractional Indexing)
+
+Tasks use fractional positions (Float) instead of sequential integers:
+
+- **Schema**: `position Float @default(100)` in Prisma
+- **New tasks**: position = `(lastTask?.position ?? 0) + 100`, creating gaps from the start
+- **Same-column reorder**: Frontend computes new position as midpoint of neighbor positions (e.g., `(pos_before + pos_after) / 2`)
+- **Cross-column move**: Frontend computes position relative to target column neighbors
+- **Column drop (end of column)**: position = `lastPosition + 100`
+- **Empty column**: position = `100`
+- **Backend**: Single-row `prisma.task.update({ data: { status, position } })` — no shifting, no transactions on move
+- **Delete**: Single-row `prisma.task.delete()` — no position shifting (fractional gaps are harmless)
 
 ## External Dependencies
 
@@ -159,7 +170,7 @@ The same Effect-TS pattern flows end-to-end from frontend to backend:
 | `JWT_SECRET` | Credential | JWT signing secret (min 32 chars) |
 | `STRIPE_SECRET_KEY` | Credential | Stripe API secret key |
 | `STRIPE_WEBHOOK_SECRET` | Credential | Stripe webhook signing secret |
-| `PORT` | Operational | Server port (forced to 10000 by Render) |
+| `PORT` | Operational | Server port |
 | `FRONTEND_URL` | Operational | CORS allowed origin |
 | `NODE_ENV` | Operational | `development` / `test` / `production` |
 | `NEXT_PUBLIC_API_URL` | Operational | Backend API URL for frontend fetch calls |

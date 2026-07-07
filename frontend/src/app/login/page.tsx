@@ -5,7 +5,7 @@ import { useLogin } from '../../features/auth/auth.api';
 import { useAuth } from '../../lib/auth-context';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LoginInputSchema } from '../../schemas/auth.schema';
+import { LoginInputSchema } from '../../features/auth/auth.schema';
 import { PasswordInput } from '../../features/auth/password-input';
 
 export default function LoginPage() {

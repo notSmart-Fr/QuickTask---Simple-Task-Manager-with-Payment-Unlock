@@ -1,23 +1,37 @@
 import { Router } from "express";
 import { z } from "zod";
 import { Effect, Either } from "effect";
-import {
-  TaskTitleSchema,
-  TaskDescriptionSchema,
-  UpdateTaskStatusInputSchema,
-} from "../shared/schemas.js";
 import type { Request, Response } from "express";
-import type { TaskService } from "../core/task/task.service.js";
-import { authMiddleware } from "./middleware/auth.middleware.js";
+import { TaskService } from "./tasks.service.js";
+import { authMiddleware } from "../../middleware/auth.middleware.js";
 
 // --------------- Zod boundary schemas ---------------
 
-const CreateTaskSchema = z.object({
+const TaskStatusSchema = z.enum(["TODO", "IN_PROGRESS", "DONE"]);
+
+const TaskTitleSchema = z
+  .string()
+  .trim()
+  .min(1, "Task title is required")
+  .max(200, "Title must be ≤ 200 characters");
+
+const TaskDescriptionSchema = z
+  .string()
+  .max(2000, "Description must be ≤ 2000 characters")
+  .optional()
+  .default("");
+
+const TaskPositionSchema = z.number().nonnegative();
+
+const CreateTaskInputSchema = z.object({
   title: TaskTitleSchema,
   description: TaskDescriptionSchema,
 });
 
-const UpdateTaskStatusSchema = UpdateTaskStatusInputSchema;
+const UpdateTaskStatusInputSchema = z.object({
+  status: TaskStatusSchema,
+  position: TaskPositionSchema.optional(),
+});
 
 // --------------- Helpers ---------------
 
@@ -52,7 +66,7 @@ export function createTaskRouter(taskService: TaskService) {
 
   router.post("/", async (req: Request, res: Response) => {
     // Step 1: Zod at the boundary — validates shape, rejects with 400
-    const result = CreateTaskSchema.safeParse(req.body);
+    const result = CreateTaskInputSchema.safeParse(req.body);
     if (!result.success) {
       return res.status(400).json({ error: result.error.errors[0]?.message ?? "Invalid input" });
     }
@@ -97,7 +111,7 @@ export function createTaskRouter(taskService: TaskService) {
   });
 
   router.patch("/:id/status", async (req: Request, res: Response) => {
-    const result = UpdateTaskStatusSchema.safeParse(req.body);
+    const result = UpdateTaskStatusInputSchema.safeParse(req.body);
     if (!result.success) {
       return res.status(400).json({ error: result.error.errors[0]?.message ?? "Invalid input" });
     }

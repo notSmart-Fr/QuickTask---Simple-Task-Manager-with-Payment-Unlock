@@ -3,9 +3,10 @@
 import { useTasks, useUpdateTaskStatus } from './tasks.api';
 import { SortableTaskCard } from './sortable-task-card';
 import { TaskCard } from './task-card';
-import type { Task, TaskStatus } from '../../schemas/task.schema';
+import type { Task, TaskStatus } from './task.schema';
 import {
   DndContext,
+  closestCorners,
   pointerWithin,
   KeyboardSensor,
   PointerSensor,
@@ -15,6 +16,8 @@ import {
   DragEndEvent,
   DragStartEvent,
   useDroppable,
+  useDndContext,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -29,19 +32,56 @@ const COLUMNS: { status: TaskStatus; label: string }[] = [
   { status: 'DONE', label: 'Done' },
 ];
 
+const columnStatuses = new Set<string>(COLUMNS.map((c) => c.status));
+
+// Spacer droppable IDs — positioned below the last card in each column
+// so users see a visible "drop here" zone instead of card replacement.
+const spacerIds = new Set<string>(COLUMNS.map((c) => `${c.status}-spacer`));
+
+// Layered collision strategy: pointerWithin checks exact cursor position first,
+// giving priority to sortable card items. Falls back to closestCorners for empty columns.
+const collisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  const cardCollisions = pointerCollisions.filter((c) => !columnStatuses.has(c.id.toString()));
+  if (cardCollisions.length > 0) return cardCollisions;
+  return closestCorners(args);
+};
+
 // ── Sub-components ──
 
 function DroppableColumn({ status, label, children }: { status: TaskStatus; label: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
-    <div ref={setNodeRef} className={`bg-gray-100 rounded-lg p-4 transition-colors ${isOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''}`}>
+    <div
+      ref={setNodeRef}
+      className={`bg-gray-100 rounded-lg p-4 pb-2 min-h-[120px] transition-colors ${
+        isOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''
+      }`}
+    >
       <h3 className="font-semibold text-gray-800 mb-3">{label}</h3>
       {children}
-      {isOver && (
-        <div className="h-16 border-2 border-dashed border-blue-400 rounded-lg bg-blue-50 flex items-center justify-center">
-          <p className="text-blue-500 text-sm">Drop here</p>
-        </div>
-      )}
+    </div>
+  );
+}
+
+// ponytail: fixed-height drop spacer so layout never shifts during drag.
+// Only toggles border + background — no height animation, no flicker.
+function DropSpacer({ status }: { status: TaskStatus }) {
+  const id = `${status}-spacer`;
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const { active } = useDndContext();
+  const isDragging = active !== null;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`mt-1 ${
+        isDragging ? 'h-12 border-2 rounded-lg flex items-center justify-center' : 'h-0.5'
+      } ${
+        isOver ? 'border-blue-400 bg-blue-50' : 'border-transparent'
+      }`}
+    >
+      {isDragging && isOver && <span className="text-sm text-blue-600 font-medium">Drop here</span>}
     </div>
   );
 }
@@ -64,31 +104,95 @@ function ErrorToast({ message }: { message: string | null }) {
   );
 }
 
-// ── Cursor midpoint drop calculation ──
-//
-// Production-grade logic: use pointerWithin collision detection + 50% vertical
-// threshold on the target card. Pointer above midpoint → insert before.
-// Pointer below midpoint → insert after. Matches Trello/Jira/Linear feel.
+// ── Helpers ──
 
-function calcDropPosition(
-  tasks: Task[],
-  activeTask: Task,
-  overId: string,
-  overRect: { top: number; height: number },
-  pointerY: number,
-): { status: TaskStatus; position: number } | null {
-  // Drop on a column → pointer in top half = position 0, bottom half = append
-  if (COLUMNS.some((c) => c.status === overId)) {
-    const columnTasks = tasks.filter((t) => t.status === overId);
-    const pos = columnTasks.length === 0 ? 0 : pointerY < overRect.top + overRect.height / 2 ? 0 : columnTasks.length;
-    return { status: overId as TaskStatus, position: pos };
+function sortedColumnTasks(tasks: Task[], status: TaskStatus): Task[] {
+  return tasks
+    .filter((t) => t.status === status)
+    .sort((a, b) => a.position - b.position);
+}
+
+// ponytail: @dnd-kit's arrayMove is an inline 3-liner — no need to hunt for the export.
+function arrayMove<T>(arr: T[], fromIndex: number, toIndex: number): T[] {
+  const result = [...arr];
+  const [item] = result.splice(fromIndex, 1);
+  result.splice(toIndex, 0, item);
+  return result;
+}
+
+type DropTarget = { status: TaskStatus; position: number };
+
+function tryColumnDrop(tasks: Task[], activeTask: Task, overId: string): DropTarget | null {
+  // Handle column droppable and spacer droppable
+  const statusFromId = columnStatuses.has(overId)
+    ? (overId as TaskStatus)
+    : spacerIds.has(overId)
+      ? overId.replace("-spacer", "") as TaskStatus
+      : null;
+  if (!statusFromId) return null;
+
+  const colTasks = sortedColumnTasks(tasks, statusFromId).filter((t) => t.id !== activeTask.id);
+  // Guard: dropping on own column at the end is a no-op
+  if (activeTask.status === statusFromId &&
+      sortedColumnTasks(tasks, activeTask.status).indexOf(activeTask) === colTasks.length) return null;
+
+  // Append past the last task in the column
+  const position = colTasks.length > 0 ? colTasks[colTasks.length - 1].position + 100 : 100;
+  return { status: statusFromId, position };
+}
+
+function trySameColumnDrop(tasks: Task[], activeTask: Task, overId: string): DropTarget | null {
+  const colTasks = sortedColumnTasks(tasks, activeTask.status);
+  const oldIndex = colTasks.findIndex((t) => t.id === activeTask.id);
+  const overIndex = colTasks.findIndex((t) => t.id === overId);
+  if (oldIndex === -1 || overIndex === -1 || oldIndex === overIndex) return null;
+
+  const moved = arrayMove(colTasks, oldIndex, overIndex);
+  const targetIndex = moved.findIndex((t) => t.id === activeTask.id);
+
+  // Compute fractional position from neighbors in the moved array
+  let position: number;
+  if (targetIndex === 0) {
+    position = moved[1].position / 2;
+  } else if (targetIndex === moved.length - 1) {
+    position = moved[moved.length - 2].position + 100;
+  } else {
+    position = (moved[targetIndex - 1].position + moved[targetIndex + 1].position) / 2;
   }
 
-  // Drop on a task card → 50% threshold determines insert-before or insert-after
+  return { status: activeTask.status, position };
+}
+
+function tryCrossColumnDrop(tasks: Task[], activeTask: Task, overId: string): DropTarget | null {
   const overTask = tasks.find((t) => t.id === overId);
-  if (!overTask || overTask.id === activeTask.id) return null;
-  const targetPos = pointerY > overRect.top + overRect.height / 2 ? overTask.position + 1 : overTask.position;
-  return { status: overTask.status, position: targetPos };
+  if (!overTask) return null;
+  if (activeTask.status === overTask.status) return null;
+
+  const targetCol = sortedColumnTasks(tasks, overTask.status).filter((t) => t.id !== activeTask.id);
+  const overIndex = targetCol.findIndex((t) => t.id === overId);
+
+  // Compute fractional position in the target column
+  let position: number;
+  if (targetCol.length === 0) {
+    position = 100;
+  } else if (overIndex <= 0) {
+    position = targetCol[0].position / 2;
+  } else if (overIndex >= targetCol.length) {
+    position = targetCol[targetCol.length - 1].position + 100;
+  } else {
+    position = (targetCol[overIndex - 1].position + targetCol[overIndex].position) / 2;
+  }
+
+  return { status: overTask.status, position };
+}
+
+function computeDropTarget(tasks: Task[], activeId: string, overId: string): DropTarget | null {
+  const activeTask = tasks.find((t) => t.id === activeId);
+  if (!activeTask) return null;
+
+  return tryColumnDrop(tasks, activeTask, overId)
+    ?? trySameColumnDrop(tasks, activeTask, overId)
+    ?? tryCrossColumnDrop(tasks, activeTask, overId);
 }
 
 // ── Main ──
@@ -118,15 +222,17 @@ export function KanbanBoard() {
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveId(null);
-    const { active, over, delta, activatorEvent } = event;
-    if (!over) return;
-    const tasks = tasksQuery.data ?? [];
-    const activeTask = tasks.find((t) => t.id === active.id);
-    if (!activeTask) return;
-    const pointerY = (activatorEvent as PointerEvent).clientY + delta.y;
-    const target = calcDropPosition(tasks, activeTask, over.id.toString(), over.rect, pointerY);
-    if (!target || (activeTask.status === target.status && activeTask.position === target.position)) return;
-    updateTask.mutate({ taskId: activeTask.id, status: target.status, position: target.position });
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const target = computeDropTarget(
+      tasksQuery.data ?? [],
+      active.id.toString(),
+      over.id.toString(),
+    );
+    if (!target) return;
+
+    updateTask.mutate({ taskId: active.id.toString(), status: target.status, position: target.position });
   };
 
   if (tasksQuery.isLoading) return <div className="p-4">Loading tasks...</div>;
@@ -135,12 +241,14 @@ export function KanbanBoard() {
   const tasks = tasksQuery.data || [];
   const activeTask = tasks.find((t) => t.id === activeId);
   const groupedTasks = {} as Record<TaskStatus, Task[]>;
-  for (const col of COLUMNS) groupedTasks[col.status] = tasks.filter((t) => t.status === col.status).sort((a, b) => a.position - b.position);
+  for (const col of COLUMNS) {
+    groupedTasks[col.status] = sortedColumnTasks(tasks, col.status);
+  }
 
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={pointerWithin}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
@@ -152,6 +260,7 @@ export function KanbanBoard() {
                 ? <p className="text-gray-500 text-sm">No tasks</p>
                 : groupedTasks[col.status].map((task) => <SortableTaskCard key={task.id} task={task} />)}
             </SortableContext>
+            <DropSpacer status={col.status} />
           </DroppableColumn>
         ))}
       </div>

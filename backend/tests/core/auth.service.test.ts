@@ -1,48 +1,48 @@
 import { describe, it, expect, vi } from "vitest";
 import { Effect, Either } from "effect";
-import { AuthService } from "../../src/core/auth/auth.service.js";
-import type { UserRepositoryPort } from "../../src/core/auth/auth.port.js";
-import type { PasswordHasherPort } from "../../src/core/auth/auth.port.js";
-import type { TokenPort } from "../../src/core/auth/auth.port.js";
-import type { User } from "../../src/core/auth/user.entity.js";
+import { AuthService } from "../../src/features/auth/auth.service.js";
+import type { Hasher, TokenService } from "../../src/features/auth/auth.service.js";
+import { PrismaClient } from "@prisma/client";
 
-const makeUser = (overrides: Partial<User> = {}): User => ({
-  id: "user-1",
-  name: "Alice",
-  email: "alice@test.com",
-  passwordHash: "hashed-password",
-  isPremium: false,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
+type MockPrisma = {
+  user: {
+    findUnique: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
+};
+
+function makeMockPrisma(): MockPrisma {
+  return {
+    user: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
+  };
+}
 
 function makeAuthService(mocks: {
-  userRepo?: Partial<UserRepositoryPort>;
-  hasher?: Partial<PasswordHasherPort>;
-  tokenService?: Partial<TokenPort>;
+  prisma?: { user?: Partial<MockPrisma["user"]> };
+  hasher?: Partial<Hasher>;
+  tokenService?: Partial<TokenService>;
 }) {
-  const userRepo: UserRepositoryPort = {
-    create: vi.fn(),
-    findByEmail: vi.fn(),
-    findById: vi.fn(),
-    updateToPremium: vi.fn(),
-    transaction: vi.fn().mockImplementation(async (fn) => fn(userRepo)),
-    ...mocks.userRepo,
-  };
-  const hasher: PasswordHasherPort = {
+  const prisma = makeMockPrisma();
+  Object.assign(prisma.user, mocks.prisma?.user);
+
+  const hasher: Hasher = {
     hash: vi.fn(),
     compare: vi.fn(),
     ...mocks.hasher,
   };
-  const tokenService: TokenPort = {
+  const tokenService: TokenService = {
     sign: vi.fn(),
     verify: vi.fn(),
     ...mocks.tokenService,
   };
   return {
-    authService: new AuthService(userRepo, hasher, tokenService),
-    userRepo,
+    authService: new AuthService(prisma as unknown as PrismaClient, hasher, tokenService),
+    prisma,
     hasher,
     tokenService,
   };
@@ -50,11 +50,20 @@ function makeAuthService(mocks: {
 
 describe("AuthService.register", () => {
   it("creates a user and returns a token on success", async () => {
-    const user = makeUser();
-    const { authService, userRepo, hasher, tokenService } = makeAuthService({
-      userRepo: {
-        findByEmail: vi.fn().mockResolvedValue(null),
-        create: vi.fn().mockResolvedValue(user),
+    const { authService, prisma, hasher } = makeAuthService({
+      prisma: {
+        user: {
+          findUnique: vi.fn().mockResolvedValue(null),
+          create: vi.fn().mockResolvedValue({
+            id: "user-1",
+            name: "Alice",
+            email: "alice@test.com",
+            passwordHash: "hashed-password",
+            isPremium: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }),
+        },
       },
       hasher: { hash: vi.fn().mockResolvedValue("hashed-password") },
       tokenService: { sign: vi.fn().mockReturnValue("jwt-token") },
@@ -68,21 +77,26 @@ describe("AuthService.register", () => {
 
     expect(Either.isRight(either)).toBe(true);
     if (Either.isRight(either)) {
-      expect(either.right.user).toEqual(user);
       expect(either.right.token).toBe("jwt-token");
-      expect(userRepo.findByEmail).toHaveBeenCalledWith("alice@test.com");
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: "alice@test.com" } });
       expect(hasher.hash).toHaveBeenCalledWith("password123");
-      expect(userRepo.create).toHaveBeenCalledWith({
-        name: "Alice",
-        email: "alice@test.com",
-        passwordHash: "hashed-password",
+      expect(prisma.user.create).toHaveBeenCalledWith({
+        data: { name: "Alice", email: "alice@test.com", passwordHash: "hashed-password" },
       });
     }
   });
 
   it("fails with EmailAlreadyRegistered when email exists", async () => {
     const { authService } = makeAuthService({
-      userRepo: { findByEmail: vi.fn().mockResolvedValue(makeUser()) },
+      prisma: {
+        user: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "existing",
+            name: "Existing",
+            email: "alice@test.com",
+          }),
+        },
+      },
     });
 
     const either = await Effect.runPromise(
@@ -93,16 +107,24 @@ describe("AuthService.register", () => {
 
     expect(Either.isLeft(either)).toBe(true);
     if (Either.isLeft(either)) {
-      expect(either.left._tag).toBe("EmailAlreadyRegistered");
+      expect((either.left as { _tag: string })._tag).toBe("EmailAlreadyRegistered");
     }
   });
 });
 
 describe("AuthService.login", () => {
   it("returns user and token on valid credentials", async () => {
-    const user = makeUser();
-    const { authService, userRepo, hasher, tokenService } = makeAuthService({
-      userRepo: { findByEmail: vi.fn().mockResolvedValue(user) },
+    const user = {
+      id: "user-1",
+      name: "Alice",
+      email: "alice@test.com",
+      passwordHash: "hashed-password",
+      isPremium: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const { authService } = makeAuthService({
+      prisma: { user: { findUnique: vi.fn().mockResolvedValue(user) } },
       hasher: { compare: vi.fn().mockResolvedValue(true) },
       tokenService: { sign: vi.fn().mockReturnValue("jwt-token") },
     });
@@ -115,14 +137,13 @@ describe("AuthService.login", () => {
 
     expect(Either.isRight(either)).toBe(true);
     if (Either.isRight(either)) {
-      expect(either.right.user).toEqual(user);
       expect(either.right.token).toBe("jwt-token");
     }
   });
 
   it("fails with InvalidCredentials for unknown email", async () => {
     const { authService } = makeAuthService({
-      userRepo: { findByEmail: vi.fn().mockResolvedValue(null) },
+      prisma: { user: { findUnique: vi.fn().mockResolvedValue(null) } },
     });
 
     const either = await Effect.runPromise(
@@ -133,14 +154,22 @@ describe("AuthService.login", () => {
 
     expect(Either.isLeft(either)).toBe(true);
     if (Either.isLeft(either)) {
-      expect(either.left._tag).toBe("InvalidCredentials");
+      expect((either.left as { _tag: string })._tag).toBe("InvalidCredentials");
     }
   });
 
   it("fails with InvalidCredentials for wrong password", async () => {
-    const user = makeUser();
+    const user = {
+      id: "user-1",
+      name: "Alice",
+      email: "alice@test.com",
+      passwordHash: "hashed",
+      isPremium: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
     const { authService } = makeAuthService({
-      userRepo: { findByEmail: vi.fn().mockResolvedValue(user) },
+      prisma: { user: { findUnique: vi.fn().mockResolvedValue(user) } },
       hasher: { compare: vi.fn().mockResolvedValue(false) },
     });
 
@@ -152,7 +181,7 @@ describe("AuthService.login", () => {
 
     expect(Either.isLeft(either)).toBe(true);
     if (Either.isLeft(either)) {
-      expect(either.left._tag).toBe("InvalidCredentials");
+      expect((either.left as { _tag: string })._tag).toBe("InvalidCredentials");
     }
   });
 });

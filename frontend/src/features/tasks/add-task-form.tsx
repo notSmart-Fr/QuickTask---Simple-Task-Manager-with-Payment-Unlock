@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useCreateTask } from './tasks.api';
-import { CreateTaskInputSchema } from '../../schemas/task.schema';
+import { CreateTaskInputSchema } from './task.schema';
 
 interface AddTaskFormProps {
   onLimitError?: (message: string) => void;

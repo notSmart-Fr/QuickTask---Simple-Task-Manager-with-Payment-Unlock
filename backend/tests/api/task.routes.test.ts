@@ -3,9 +3,9 @@ import express from "express";
 import request from "supertest";
 import { Effect } from "effect";
 import jwt from "jsonwebtoken";
-import { createTaskRouter } from "../../src/api/task.routes.js";
-import { TaskLimitReached, TaskNotFound } from "../../src/core/task/task.service.js";
-import type { TaskService } from "../../src/core/task/task.service.js";
+import { createTaskRouter } from "../../src/features/tasks/tasks.routes.js";
+import { TaskLimitReached, TaskNotFound } from "../../src/features/tasks/tasks.service.js";
+import type { TaskService } from "../../src/features/tasks/tasks.service.js";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 

@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 import { Effect } from "effect";
-import { createAuthRouter } from "../../src/api/auth.routes.js";
-import { EmailAlreadyRegistered, InvalidCredentials } from "../../src/core/auth/auth.service.js";
-import type { AuthService } from "../../src/core/auth/auth.service.js";
+import { createAuthRouter } from "../../src/features/auth/auth.routes.js";
+import { EmailAlreadyRegistered, InvalidCredentials } from "../../src/features/auth/auth.service.js";
+import type { AuthService } from "../../src/features/auth/auth.service.js";
 
 function makeApp(authService: Partial<AuthService>) {
   const app = express();

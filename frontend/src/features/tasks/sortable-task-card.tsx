@@ -1,6 +1,6 @@
 'use client';
 
-import type { Task } from '../../schemas/task.schema';
+import type { Task } from './task.schema';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TaskCard } from './task-card';
@@ -26,17 +26,17 @@ export function SortableTaskCard({ task }: SortableTaskCardProps) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="mb-3 flex items-start gap-1">
+    <div ref={setNodeRef} style={style} className="mb-3 flex items-start gap-1 touch-none">
       {/* Card content */}
       <div className="flex-1 min-w-0">
         <TaskCard task={task} />
       </div>
-      {/* Drag handle on the right */}
+      {/* Drag handle on the right — wider touch target for mobile */}
       <button
         type="button"
         {...attributes}
         {...listeners}
-        className="mt-4 shrink-0 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 p-1 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+        className="mt-4 shrink-0 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
         aria-label="Drag to reorder"
         tabIndex={-1}
       >

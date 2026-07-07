@@ -7,24 +7,19 @@
 
 QuickTask is a simple task manager with payment unlock. Free users get 3 tasks; $5 one-time Stripe payment unlocks unlimited tasks.
 
-**Architecture**: Feature-driven hexagonal (ports & adapters). Strict composition root — only `main.ts` instantiates adapters.
+**Architecture**: Vertical Slice Architecture. Every feature is a self-contained folder owning its routes, service logic, database calls, and switchable driver contracts. Strict composition root — only `main.ts` instantiates service classes and drivers.
 
 ```
 backend/
   src/
-    core/          ← Domain logic (pure, no frameworks, Effect-TS)
-      auth/        → AuthService, User entity, ports
-      task/        → TaskService, Task entity, ports  
-      payment/     → PaymentService, Payment entity, ports
-    adapters/      ← Infrastructure implementations
-      prisma/      → PrismaUserRepository, PrismaTaskRepository, PrismaPaymentRepository
-      bcrypt/      → BcryptHasher
-      jwt/         → JwtToken
-      stripe/      → StripeGateway
-    api/           ← Express routes (Zod boundary → Effect domain)
-    shared/        → Shared Zod schemas (cross-boundary)
+    features/      ← Every feature is a self-contained vertical slice
+      auth/        → auth.service.ts, auth.routes.ts
+      tasks/       → tasks.service.ts, tasks.routes.ts  
+      payment/     → payment.service.ts, payment.routes.ts, driver.stripe.ts
+    middleware/    ← Cross-cutting (auth JWT middleware)
+    types/         ← Express type augmentation
     config.ts      ← Zod-validated, crashes on startup if env missing
-    main.ts        ← Composition root (THE ONLY place adapters are `new`'d)
+    main.ts        ← Composition root (THE ONLY place services/drivers are `new`'d)
 
 frontend/
   src/
@@ -32,20 +27,14 @@ frontend/
       login/       → LoginPage
       register/    → RegisterPage
       dashboard/   → DashboardPage (Kanban + AddTaskForm)
-    features/      ← TanStack Query hooks + UI components
-      auth/        → auth.api.ts (useQuery/useMutation ↔ Effect bridge)
-      tasks/       → tasks.api.ts, kanban-board, task-card, add-task-form
-      payment/     → payment.api.ts, unlock-button
-    core/          ← Domain logic (pure Effect-TS, no React/Next.js)
-      errors.ts    → Data.TaggedError: NetworkError, HttpError
-      api/         → Effect pipelines for each feature
-        auth.effect.ts      → registerEffect, loginEffect, fetchMeEffect
-        task.effect.ts      → fetchTasksEffect, createTaskEffect, ...
-        payment.effect.ts   → createCheckoutEffect
+    features/      ← Each feature owns its API hooks, effects, schemas, and components
+      auth/        → auth.api.ts, auth.effect.ts, auth.schema.ts, password-input.tsx
+      tasks/       → tasks.api.ts, tasks.effect.ts, task.schema.ts, kanban-board, task-card, ...
+      payment/     → payment.api.ts, payment.effect.ts, unlock-button.tsx
     lib/           ← Shared infrastructure
       effect-client.ts  → Effect-based HTTP adapter (Effect.tryPromise + fetch)
       auth-context.tsx  → React Context for auth state
-    schemas/       → Client-side Zod validation schemas
+      errors.ts         → Data.TaggedError: NetworkError, HttpError
 ```
 
 ## Tech Stack
@@ -103,9 +92,9 @@ Effect-TS flows through the entire stack with the same `Data.TaggedError` types,
 │    │ useQuery / useMutation                                             │
 │    ▼                                                                    │
 │  TanStack Query hooks               ← bridge: Effect.either → throw    │
-│    │ runEffect(corePipeline)                                            │
+│    │ runEffect(featureEffect)                                           │
 │    ▼                                                                    │
-│  core/api/*.effect.ts               ← pure Effect pipelines            │
+│  features/*/*.effect.ts             ← pure Effect pipelines            │
 │    │ effectApi.get/post/patch/delete                                    │
 │    ▼                                                                    │
 │  lib/effect-client.ts               ← Effect.tryPromise wrapping fetch  │
@@ -115,14 +104,11 @@ Effect-TS flows through the entire stack with the same `Data.TaggedError` types,
 ├────│────────────────────────────────────────────────────────────────────┤
 │    ▼                          BACKEND (Express)                         │
 │                                                                         │
-│  api/*.routes.ts                    ← Zod.safeParse at boundary        │
+│  features/*/*.routes.ts            ← Zod.safeParse at boundary         │
 │    │ Effect.either(service.method())  + _tag match for status codes     │
 │    ▼                                                                    │
-│  core/*.service.ts                  ← Effect.gen + Data.TaggedError    │
-│    │ repo.create / repo.findByEmail          typed error channels      │
-│    ▼                                                                    │
-│  adapters/prisma/*.repository.ts    ← Prisma queries in Effect.tryPromise│
-│    │                                                                    │
+│  features/*/*.service.ts           ← Effect.gen + Data.TaggedError     │
+│    │ prisma.user/task/payment calls directly (no repository layer)     │
 │    ▼                                                                    │
 │  PostgreSQL (Neon)                                                      │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -186,11 +172,11 @@ if (error._tag === "HttpError" && error.status === 403) {
 |-------|---------------|------------|
 | **UI** | No Effect — declarative JSX | Checks `query.error?._tag` / `mutation.isError` |
 | **TanStack Query hooks** | `Effect.runPromise(Effect.either(program))` | `Either.isLeft` → throw `either.left` (preserves `_tag`) |
-| **Core Effect pipelines** | `Effect.tryPromise` wrapping `effectApi` | Returns `Effect<Data, HttpError \| NetworkError>` |
+| **Feature Effect pipelines** | `Effect.tryPromise` wrapping `effectApi` | Returns `Effect<Data, HttpError \| NetworkError>` |
 | **HTTP adapter** | `Effect.tryPromise` wrapping `fetch()` | `throw new HttpError({ status, message })` → caught by `catch:` |
-| **Backend API routes** | `Effect.runPromise(Effect.either(service))` | `_tag` match → HTTP status code |
-| **Backend services** | `Effect.gen` + `Effect.tryPromise` | `yield* Effect.fail(new TaskLimitReached({}))` |
-| **Backend adapters** | `Effect.tryPromise` wrapping Prisma | Errors caught → typed domain error |
+| **Backend feature routes** | `Effect.runPromise(Effect.either(service))` | `_tag` match → HTTP status code |
+| **Backend feature services** | `Effect.gen` + `Effect.tryPromise` | `yield* Effect.fail(new TaskLimitReached({}))` |
+| **Backend Prisma (direct)** | `Effect.tryPromise` wrapping Prisma client | Errors caught → typed domain error |
 
 ## Effect-TS Rules (CRITICAL)
 
@@ -216,7 +202,7 @@ if (either.left._tag === "TaskNotFound") { ... }
 if (error instanceof TaskNotFound) { ... }
 ```
 
-### 3. `try/catch` is FORBIDDEN in `core/` and `api/`
+### 3. `try/catch` is FORBIDDEN in `features/` (backend) and `features/` (frontend core)
 
 All error handling goes through the Effect error channel. Use:
 
@@ -262,9 +248,21 @@ async createTask(user, data): Promise<Task>
 
 ## Composition Root (FM2)
 
-- **ONLY `main.ts`** instantiates adapters (`new PrismaUserRepository()`, `new BcryptHasher()`, etc.)
-- This is enforced by ESLint Ban 16: `new AdapterClass()` outside `main.ts` is a build error
-- Services receive their dependencies via constructor injection
+- **ONLY `main.ts`** instantiates service classes and drivers (`new TaskService(prisma)`, `new AuthService(prisma)`, `new StripeGateway()`, etc.)
+- Services that need switchable dependencies (PaymentGateway, Hasher, TokenService) receive them via constructor injection with default implementations
+- Services that call Prisma directly (TaskService, AuthService) receive only the `PrismaClient`
+
+## Feature Autonomy Rule
+
+- All code for a feature lives in its `features/` folder: routes, service, drivers, types.
+- If a feature folder is deleted, that feature is 100% removed — no ghost files, no broken imports in other features.
+- Cross-cutting concerns (auth middleware, config, types augmentation) live outside features.
+
+## Selective Switchability
+
+- **Payment gateway** → `PaymentGateway` interface at top of `payment.service.ts`, with `driver.stripe.ts` implementing it. Room for `driver.bkash.ts` later.
+- **Auth hasher & token** → `Hasher` and `TokenService` interfaces at top of `auth.service.ts`, with `BcryptHasher` and `JwtToken` as default implementations.
+- **Tasks** → No abstraction. `TaskService` takes `PrismaClient` and calls it directly.
 
 ## Project Invariants (Enforced by ESLint)
 
@@ -276,13 +274,12 @@ async createTask(user, data): Promise<Task>
 | Ban 4 | `console.log` (use `console.error`) | Backend (except main.ts) |
 | Ban 7 | `process.exit()` | All code (except main.ts) |
 | Ban 9 | `process.env` | All code (except config.ts) |
-| Ban 10 | `Date.now()` / `new Date()` | `core/` |
+| Ban 10 | `Date.now()` / `new Date()` | `src/features/**/*.ts` (backend) |
 | Ban 12 | `export *` barrel exports | All code |
-| Ban 14 | `Math.random()` / `crypto.randomUUID()` | `core/` |
-| Ban 16 | `new AdapterClass()` outside main.ts | All code |
+| Ban 14 | `Math.random()` / `crypto.randomUUID()` | `src/features/**/*.ts` (backend) |
 | — | `$queryRaw` / `$executeRaw` (Prisma raw SQL) | All code |
-| — | `try/catch` | `core/` and `api/` (both backend & frontend) |
-| — | `instanceof` for Effect tagged errors | `core/` and `api/` |
+| — | `try/catch` | `src/features/**/*.ts` (backend) and frontend `features/` effect files |
+| — | `instanceof` for Effect tagged errors | `src/features/**/*.ts` (backend) |
 
 ## Testing Patterns
 

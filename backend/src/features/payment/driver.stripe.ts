@@ -1,22 +1,18 @@
 import Stripe from "stripe";
 import config from "../../config.js";
-import type {
-  PaymentGatewayPort,
-  StripeWebhookEvent,
-  StripeCheckoutSession,
-} from "../../core/payment/payment.port.js";
+import type { PaymentGateway, WebhookEvent, CheckoutSession } from "./payment.service.js";
 
 const stripe = new Stripe(config.STRIPE_SECRET_KEY, {
   // Stripe SDK uses its latest supported API version by default
 });
 
-export class StripeGateway implements PaymentGatewayPort {
+export class StripeGateway implements PaymentGateway {
   async createCheckoutSession(
     userId: string,
     customerEmail: string,
     successUrl: string,
     cancelUrl: string,
-  ): Promise<StripeCheckoutSession> {
+  ): Promise<CheckoutSession> {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       success_url: successUrl,
@@ -50,20 +46,20 @@ export class StripeGateway implements PaymentGatewayPort {
   verifyWebhookSignature(
     body: Buffer,
     signature: string,
-  ): StripeWebhookEvent {
+  ): WebhookEvent {
     const event = stripe.webhooks.constructEvent(
       body,
       signature,
       config.STRIPE_WEBHOOK_SECRET,
     );
-    return event as unknown as StripeWebhookEvent;
+    return event as unknown as WebhookEvent;
   }
 
-  getEventId(event: StripeWebhookEvent): string {
+  getEventId(event: WebhookEvent): string {
     return event.id;
   }
 
-  getSessionId(event: StripeWebhookEvent): string | null {
+  getSessionId(event: WebhookEvent): string | null {
     if (event.type === "checkout.session.completed") {
       return event.data.object.id;
     }

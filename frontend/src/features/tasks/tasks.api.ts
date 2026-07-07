@@ -1,14 +1,14 @@
 import { Effect, Either } from "effect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import type { Task, TaskStatus } from "../../schemas/task.schema";
-import type { HttpError, NetworkError } from "../../core/errors";
+import type { Task, TaskStatus } from "./task.schema";
+import type { HttpError, NetworkError } from "../../lib/errors";
 import {
   fetchTasksEffect,
   createTaskEffect,
   deleteTaskEffect,
   updateTaskStatusEffect,
-} from "../../core/api/task.effect";
+} from "./tasks.effect";
 
 type TaskError = HttpError | NetworkError;
 

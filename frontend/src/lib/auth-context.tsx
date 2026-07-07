@@ -9,7 +9,14 @@ import React, {
 } from 'react';
 import { z } from 'zod';
 import type { User } from '../features/auth/auth.api';
-import { NameSchema, EmailSchema } from '../schemas/index';
+
+const NameSchema = z
+  .string()
+  .trim()
+  .min(1, "Name is required")
+  .max(100, "Name must be ≤ 100 characters");
+
+const EmailSchema = z.string().email("Invalid email address").trim();
 
 const UserSchema = z.object({
   id: z.string(),

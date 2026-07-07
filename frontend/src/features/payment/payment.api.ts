@@ -1,8 +1,8 @@
 import { Effect, Either } from "effect";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { UseMutationResult } from "@tanstack/react-query";
-import { createCheckoutEffect } from "../../core/api/payment.effect";
-import type { HttpError, NetworkError } from "../../core/errors";
+import { createCheckoutEffect } from "./payment.effect";
+import type { HttpError, NetworkError } from "../../lib/errors";
 
 export interface CreateCheckoutResponse {
   checkoutUrl: string;

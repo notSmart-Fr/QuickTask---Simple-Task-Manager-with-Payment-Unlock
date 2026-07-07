@@ -2,7 +2,7 @@
 
 ## Register
 
-**Request shape** (from [shared/schemas.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/shared/schemas.ts)):
+**Request shape** (Zod):
 ```typescript
 { name: string; email: string; password: string }
 ```
@@ -11,20 +11,19 @@
 - `password`: min 8 chars
 
 **Entry**: `POST /api/v1/auth/register`
-[backend/src/api/auth.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/auth.routes.ts#L22-49)
+[auth.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/auth/auth.routes.ts)
 
 **Middleware**: None (register/login are public)
 
-**Service**: [AuthService.register()](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/core/auth/auth.service.ts#L28-63)
-1. `userRepo.findByEmail(email)` → if exists → `Effect.fail(EmailAlreadyRegistered)`
-2. `hasher.hash(password)` → bcrypt genSalt(10) + hash
-3. `userRepo.create({ name, email, passwordHash })` → Prisma `user.create`
-4. `tokenService.sign(userId, name, email, isPremium)` → JWT with 7-day expiry
+**Service**: `AuthService.register(name, email, password)`
+1. `prisma.user.findUnique({ where: { email } })` → if exists → `Effect.fail(EmailAlreadyRegistered)`
+2. `hasher.hash(password)` → bcrypt genSalt(10) + hash (via injectable `Hasher` interface)
+3. `prisma.user.create({ data: { name, email, passwordHash, isPremium: false } })` — direct Prisma call
+4. `tokenService.sign(userId, name, email, isPremium)` → JWT with 7-day expiry (via injectable `TokenService` interface)
 5. Returns `{ user, token }`
 
-**Repository**: [PrismaUserRepository](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/adapters/prisma/prisma-user.repository.ts)
-- `findByEmail`: `prisma.user.findUnique({ where: { email } })`
-- `create`: `prisma.user.create({ data: { name, email, passwordHash, isPremium: false } })`
+**Constructors**: `AuthService(prisma, hasher, tokenService)` — Hasher defaults to `BcryptHasher`,
+TokenService defaults to `JwtToken`
 
 **Response shape**: `201`
 ```typescript
@@ -35,7 +34,7 @@
 | Error | _tag | HTTP | When |
 |-------|------|------|------|
 | Shape invalid | — | 400 | Zod safeParse fails (bad email, short password, etc.) |
-| Email taken | `EmailAlreadyRegistered` | 409 | `userRepo.findByEmail` returns a user |
+| Email taken | `EmailAlreadyRegistered` | 409 | `prisma.user.findUnique` returns a user |
 | DB failure | `Error` | 500 | Prisma connection loss, constraint violation, etc. |
 | Hash failure | `Error` | 500 | bcrypt unexpected error (rare) |
 
@@ -46,10 +45,10 @@
 **Request shape**: `{ email: string; password: string }`
 
 **Entry**: `POST /api/v1/auth/login`
-[backend/src/api/auth.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/auth.routes.ts#L51-76)
+[auth.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/auth/auth.routes.ts)
 
-**Service**: [AuthService.login()](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/core/auth/auth.service.ts#L66-99)
-1. `userRepo.findByEmail(email)` → if null → `Effect.fail(InvalidCredentials)`
+**Service**: `AuthService.login(email, password)`
+1. `prisma.user.findUnique({ where: { email } })` → if null → `Effect.fail(InvalidCredentials)`
 2. `hasher.compare(password, user.passwordHash)` → if false → `Effect.fail(InvalidCredentials)`
 3. `tokenService.sign(...)` → JWT
 4. Returns `{ user, token }`
@@ -70,9 +69,13 @@
 **Request shape**: No body. Requires `Authorization: Bearer <token>` header.
 
 **Entry**: `GET /api/v1/auth/me`
-[backend/src/api/auth.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/auth.routes.ts#L78-83)
+[auth.routes.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/features/auth/auth.routes.ts)
 
-**Middleware**: [auth.middleware.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/api/middleware/auth.middleware.ts)
+**Service**: `AuthService.getMe(userId)`
+1. `prisma.user.findUnique({ where: { id: userId } })` — reads fresh DB data (not JWT claims)
+2. Returns `{ id, name, email, isPremium }` — ensures isPremium matches DB
+
+**Middleware**: [auth.middleware.ts](file:///i:/QuickTask%20–%20Simple%20Task%20Manager%20with%20Payment%20Unlock/backend/src/middleware/auth.middleware.ts)
 - Extracts `Bearer <token>` from Authorization header
 - `jwt.verify(token, JWT_SECRET)` → decodes `{ userId, name, email, isPremium }`
 - Sets `req.user` or returns 401

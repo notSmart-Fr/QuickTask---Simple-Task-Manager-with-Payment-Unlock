@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { HttpError, NetworkError } from "../core/errors";
+import { HttpError, NetworkError } from "./errors";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
