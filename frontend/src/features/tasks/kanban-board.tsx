@@ -263,14 +263,16 @@ export function KanbanBoard() {
     >
       <div className="flex flex-nowrap overflow-x-auto overflow-y-hidden md:grid md:grid-cols-3 gap-4 pb-2">
         {COLUMNS.map((col) => (
-          <DroppableColumn key={col.status} status={col.status} label={col.label}>
+          <div key={col.status} className="min-w-[260px] md:min-w-0">
+            <DroppableColumn status={col.status} label={col.label}>
             <SortableContext items={groupedTasks[col.status].map((t) => t.id)} strategy={verticalListSortingStrategy}>
               {groupedTasks[col.status].length === 0
                 ? <p className="text-gray-500 text-sm">No tasks</p>
                 : groupedTasks[col.status].map((task) => <SortableTaskCard key={task.id} task={task} />)}
             </SortableContext>
             <DropSpacer status={col.status} />
-          </DroppableColumn>
+            </DroppableColumn>
+          </div>
         ))}
       </div>
       <DragPreview task={activeTask} />
