@@ -32,12 +32,11 @@ app.use(
     origin: config.FRONTEND_URL.replace(/\/+$/, ""),
   }),
 );
-app.use(express.json({
-  verify: (req, _res, buf) => {
-    // Capture raw body for Stripe webhook signature verification
-    (req as unknown as { rawBody: Buffer }).rawBody = buf;
-  },
-}));
+
+// ponytail: express.raw() before express.json() so Stripe webhook gets the
+// original Buffer for signature verification. Must be registered first.
+app.use('/api/v1/payment/webhook', express.raw({ type: 'application/json' }));
+app.use(express.json());
 
 app.get("/health", async (_req, res) => {
   try {

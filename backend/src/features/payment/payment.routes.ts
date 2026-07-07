@@ -62,7 +62,9 @@ export function createPaymentRouter(paymentService: PaymentService) {
           .json({ error: "Missing stripe-signature header" });
       }
 
-      const rawBody = (req as { rawBody?: Buffer }).rawBody as Buffer;
+      // req.body is a Buffer — express.raw() middleware runs before express.json()
+      // for this specific route (see main.ts).
+      const rawBody = req.body as unknown as Buffer;
 
       const either = await Effect.runPromise(
         Effect.either(paymentService.handleWebhook(rawBody, signature)),

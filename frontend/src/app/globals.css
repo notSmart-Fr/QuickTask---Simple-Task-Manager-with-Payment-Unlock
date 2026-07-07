@@ -1,3 +1,10 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Prevent layout shift when @dnd-kit hides the scrollbar during drag.
+   scrollbar-gutter: stable reserves the scrollbar space so content
+   doesn't jump when overflow: hidden is toggled on <body>. */
+html {
+  scrollbar-gutter: stable;
+}
