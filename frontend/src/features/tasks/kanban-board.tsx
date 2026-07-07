@@ -9,7 +9,8 @@ import {
   closestCorners,
   pointerWithin,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragOverlay,
@@ -55,7 +56,7 @@ function DroppableColumn({ status, label, children }: { status: TaskStatus; labe
     <div
       ref={setNodeRef}
       className={`bg-gray-100 rounded-lg p-4 pb-2 min-h-[120px] transition-colors ${
-        isOver ? 'ring-2 ring-blue-400 bg-blue-50' : ''
+        isOver ? 'border-2 border-blue-400 bg-blue-50' : 'border-2 border-transparent'
       }`}
     >
       <h3 className="font-semibold text-gray-800 mb-3">{label}</h3>
@@ -72,16 +73,21 @@ function DropSpacer({ status }: { status: TaskStatus }) {
   const { active } = useDndContext();
   const isDragging = active !== null;
 
+  // Hide "Drop here" label when the dragged task is from this same column.
+  // The spacer is still a valid droppable for cross-column drops.
+  const activeStatus = active?.data?.current?.status as TaskStatus | undefined;
+  const sameColumn = isDragging && activeStatus === status;
+
   return (
     <div
       ref={setNodeRef}
       className={`mt-1 ${
         isDragging ? 'h-12 border-2 rounded-lg flex items-center justify-center' : 'h-0.5'
       } ${
-        isOver ? 'border-blue-400 bg-blue-50' : 'border-transparent'
+        isOver && !sameColumn ? 'border-blue-400 bg-blue-50' : 'border-transparent'
       }`}
     >
-      {isDragging && isOver && <span className="text-sm text-blue-600 font-medium">Drop here</span>}
+      {isDragging && isOver && !sameColumn && <span className="text-sm text-blue-600 font-medium">Drop here</span>}
     </div>
   );
 }
@@ -212,7 +218,10 @@ export function KanbanBoard() {
   }, [updateTask.isError, updateTask.error]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    // ponytail: separate sensors for mouse and touch — on mobile, a 250ms
+    // hold delay lets users scroll freely without accidentally dragging.
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -252,7 +261,7 @@ export function KanbanBoard() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="flex flex-nowrap overflow-x-auto overflow-y-hidden md:grid md:grid-cols-3 gap-4 pb-2">
         {COLUMNS.map((col) => (
           <DroppableColumn key={col.status} status={col.status} label={col.label}>
             <SortableContext items={groupedTasks[col.status].map((t) => t.id)} strategy={verticalListSortingStrategy}>

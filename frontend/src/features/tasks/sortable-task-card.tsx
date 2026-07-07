@@ -26,7 +26,7 @@ export function SortableTaskCard({ task }: SortableTaskCardProps) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="mb-3 flex items-start gap-1 touch-none">
+    <div ref={setNodeRef} style={style} className="mb-3 flex items-start gap-1">
       {/* Card content */}
       <div className="flex-1 min-w-0">
         <TaskCard task={task} />
