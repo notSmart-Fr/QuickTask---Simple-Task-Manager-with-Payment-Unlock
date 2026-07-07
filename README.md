@@ -85,6 +85,14 @@ stripe listen --forward-to localhost:4000/api/v1/payment/webhook
 # Copy the signing secret from output → STRIPE_WEBHOOK_SECRET in backend/.env
 ```
 
+**You must keep `stripe listen` running** while testing payments locally. Stripe can't reach
+`localhost` directly — the CLI creates a tunnel. The signing secret from the CLI is different
+from the one in your Stripe Dashboard (which is used for production).
+
+On deployment, you configure the webhook URL in the [Stripe Dashboard](https://dashboard.stripe.com/webhooks)
+(e.g. `https://your-app.com/api/v1/payment/webhook`) and set its signing secret as the
+`STRIPE_WEBHOOK_SECRET` env var. No CLI needed — Stripe calls your public URL directly.
+
 ### 4. Verify
 
 - Open [http://localhost:3000](http://localhost:3000) → register a user
