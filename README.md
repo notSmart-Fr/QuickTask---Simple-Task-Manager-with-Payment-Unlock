@@ -1,6 +1,6 @@
 # QuickTask
 
-A simple task manager with payment unlock. Free users get 3 tasks; $5 one-time Stripe payment unlocks unlimited tasks. Kanban-style drag-and-drop, full-stack Effect-TS, hexagonal architecture.
+A simple task manager with payment unlock. Free users get 3 tasks; $5 one-time Stripe payment unlocks unlimited tasks. Kanban-style drag-and-drop with fractional indexing, full-stack Effect-TS, Vertical Slice Architecture.
 
 **Live**: [https://quick-task-simple-task-manager-with.vercel.app](https://quick-task-simple-task-manager-with.vercel.app)
 
@@ -8,17 +8,25 @@ A simple task manager with payment unlock. Free users get 3 tasks; $5 one-time S
 
 ## Architecture
 
-Feature-driven hexagonal (ports & adapters), enforced at build time via ESLint bans. `main.ts` is the single composition root — only it instantiates adapters. `core/` is pure domain logic (no frameworks, no I/O).
+**Vertical Slice Architecture** — every feature is a self-contained folder owning its routes, service logic, database calls, and switchable driver contracts. `main.ts` is the single composition root — only it instantiates services and drivers.
 
-Architecture rules are encoded as [ESLint flat config bans](backend/eslint.config.mjs) — violated imports break the build. Full architecture doc: [.knowledge/whitebox/](.knowledge/whitebox/). Project scope and agent guidance: [AGENTS.md](AGENTS.md).
+```
+backend/src/features/
+  auth/     → auth.service.ts, auth.routes.ts       (Hasher, TokenService injectable)
+  tasks/    → tasks.service.ts, tasks.routes.ts      (direct Prisma calls)
+  payment/  → payment.service.ts, payment.routes.ts, driver.stripe.ts  (PaymentGateway injectable)
+```
+
+Architecture rules are encoded as [ESLint flat config bans](backend/eslint.config.js) — violated imports fail lint. Full architecture doc: [.knowledge/whitebox/](.knowledge/whitebox/). Project scope and agent guidance: [AGENTS.md](AGENTS.md).
 
 Every request follows: **Zod at boundary → Effect pipeline → `_tag`-based error routing** — same pattern end-to-end from frontend to backend.
 
-### Development Approach
+### Key Architectural Decisions
 
-- **Spec-driven**: Features designed via [spec-kit](https://github.com/github/spec-kit) — spec → plan → tasks → implement workflow. See [specs/](specs/) for feature specs.
-- **Hexagonal architecture**: Core owns contracts (ports), adapters implement them, composition root wires them. ESLint ban rule #16 prevents `new AdapterClass()` outside `main.ts`.
-- **Strict boundaries**: Ban rules 1-16 cover everything from `any` types to `Date.now()` in core. `try/catch` forbidden in `core/` and `api/` — all error handling goes through Effect error channels.
+- **No repository layer**: Services call Prisma directly. Only payment gateway, hasher, and token service have switchable interfaces (Selective Switchability).
+- **Fractional Indexing**: Task positions are `Float` values (midpoints between neighbors). Drag-and-drop updates one database row — no shifting of other tasks.
+- **Effect-TS everywhere**: `try/catch` is forbidden in `features/`. Errors flow through `Data.TaggedError` + `Effect.either` + `_tag` matching.
+- **ESLint bans consolidated**: All prohibitions in a single `src/features/**/*.ts` block to avoid flat config override issues.
 
 ---
 
@@ -157,20 +165,20 @@ Live Render's free tier spins down after 15 min idle — first request after idl
 
 ## Implementation Notes
 
-- **Effect-TS everywhere**: Both frontend and backend use the same Effect-TS error types (`Data.TaggedError`). The frontend bridge (`runEffect`) converts Effect pipelines to TanStack Query promises while preserving typed errors. This means UI can pattern-match on `error._tag` the same way backend routes do.
+- **Effect-TS everywhere**: Both frontend and backend use the same Effect-TS error types (`Data.TaggedError`). The frontend bridge (`runEffect`) converts Effect pipelines to TanStack Query promises while preserving typed errors. UI pattern-matches on `error._tag` the same way backend routes do.
 
-- **Manual Kanban positioning**: Tasks use a `position` integer for ordering, not a linked list or fractional indexing. New tasks go to the bottom of TODO (position = count of existing TODO tasks). Drag-and-drop renumbers via `shiftPositions` in a Prisma transaction. Simple but works for the scale.
+- **Fractional Indexing (drag-and-drop)**: Task positions are `Float` values, not sequential integers. When dragging, the frontend computes the midpoint between neighboring cards using `arrayMove`. The backend performs a single-row UPDATE — no shifting of other tasks, no transaction needed. Positions: top = `firstPos / 2`, middle = `(prev + next) / 2`, bottom = `lastPos + 100`.
 
-- **Optimistic updates**: Dragging a task immediately repositions it in the TanStack Query cache. On mutation error, the cache rolls back to the previous snapshot. The brief visual "snap" after server confirmation is a known trade-off for simplicity.
+- **Layered collision detection**: `@dnd-kit/core` with `pointerWithin` (exact cursor position) falling back to `closestCorners` (column droppable). `DropSpacer` components at the bottom of each column provide visible "drop here" zones. This eliminates the adjacent-column collision bugs common with `closestCorners` alone.
 
-- **Password visibility**: Both login and register pages have Show/Hide toggles. Form errors clear on any field change (both Zod validation errors and server errors like "Invalid credentials").
+- **Selective Switchability**: Payment gateway (`PaymentGateway` interface), auth hasher (`Hasher` interface), and token service (`TokenService` interface) are injectable at the composition root. Tasks use direct Prisma calls — no abstraction where none is needed (YAGNI).
 
-- **Login form feedback**: The login page was the second form to get the error-clearing + password-toggle treatment. The register page had it first, login was missed initially — both now match.
+- **Optimistic updates**: Dragging a task immediately repositions it in the TanStack Query cache. On mutation error, the cache rolls back to the previous snapshot.
 
-- **Prisma v5 not v7**: Render's global `npx` resolves to Prisma 7 but the project uses Prisma 5.22. Build uses `pnpm install` with a `postinstall: "prisma generate"` script that calls the local binary. Moving `prisma` and `tsx` from devDependencies to dependencies was necessary for Render's production-only install.
+- **ESLint bans consolidated**: All 15+ bans live in a single `src/features/**/*.ts` config block. Prior flat config had them split across 3 overlapping blocks, which silently replaced each other — the `try/catch` ban was dead code. Now all prohibitions (Date.now, Math.random, JSON.parse, process.env, $queryRaw, try/catch, etc.) apply together.
 
-- **CORS trailing slash**: Render env vars sometimes include trailing slashes, which breaks CORS origin matching. `main.ts` strips trailing slashes from `FRONTEND_URL` with `.replace(/\/+$/, "")`.
+- **Prisma v5**: The project uses Prisma 5. Render's global `npx` resolves to Prisma 7. Build uses `pnpm install` with a `postinstall: "prisma generate"` script calling the local binary.
+
+- **CORS trailing slash**: Render env vars sometimes include trailing slashes, which break CORS origin matching. `main.ts` strips trailing slashes from `FRONTEND_URL` with `.replace(/\/+$/, "")`.
 
 - **DragOverlay duplicate IDs**: `@dnd-kit` DragOverlay renders a second copy of the task card, which caused duplicate form element IDs. Fixed by passing `variant="overlay"` to hide interactive elements in the overlay and using React `useId()` instead of `task.id`.
-
-- **Kanban pointerWithin + midpoint splitting (production-grade)**: The Kanban drag-and-drop uses `pointerWithin` from `@dnd-kit/core` — collision detection based on the **exact cursor (x, y) coordinate**, not card bounding-box overlap. This eliminates adjacent-column collision bugs entirely. On drop, `calcDropPosition` computes the target card's vertical midpoint. If the pointer is above midpoint → insert before the card; below midpoint → insert after. This is the same 50% threshold logic Trello, Jira, and Linear use. The current cursor Y is derived from `activatorEvent.clientY + delta.y` (activation point + cumulative drag delta). A fallback to `overTask.position` handles keyboard navigation where `over.rect` is unavailable.
